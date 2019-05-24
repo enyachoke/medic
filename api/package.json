@@ -27,6 +27,7 @@
     "@medic/transitions": "^1.0.10",
     "@medic/translation-utils": "^1.0.1",
     "@medic/view-map-utils": "^1.0.0",
+    "africastalking": "^0.4.0",
     "async": "^2.6.1",
     "bikram-sambat": "^1.5.0",
     "body-parser": "^1.18.3",
