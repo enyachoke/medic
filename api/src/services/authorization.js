@@ -140,7 +140,7 @@ const filterAllowedDocs = (authorizationContext, docObjs) => {
 };
 
 const alwaysAllowCreate = doc => {
-  return doc && doc.type && doc.type === 'feedback';
+  return (doc && doc.type && doc.type === 'feedback') || (doc && doc.form && doc.form === 'household_mute_approve');
 };
 
 const getContactsByDepthKeys = (userCtx, depth) => {
