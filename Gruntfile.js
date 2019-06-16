@@ -184,6 +184,10 @@ module.exports = function(grunt) {
           replace: {
             UNIT_TEST_ENV: '',
           },
+          add: {
+            COUCH_URL: 'http://admin:pass@localhost:5984/medic',
+            COUCH_NODE_NAME: 'nonode@nohost'
+          }
         },
       },
     },
@@ -434,8 +438,8 @@ module.exports = function(grunt) {
       },
       'start-webdriver': {
         cmd:
-          'yarn webdriver-manager update && ' +
-          'yarn webdriver-manager start > tests/logs/webdriver.log & ' +
+          'yarn webdriver-manager update --versions.standalone=3.8.0 && ' +
+          'yarn webdriver-manager start --versions.standalone=3.8.0 > tests/logs/webdriver.log & ' +
           'until nc -z localhost 4444; do sleep 1; done',
       },
       'check-env-vars':

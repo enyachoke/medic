@@ -13,7 +13,7 @@
   },
   "scripts": {
     "start": "nf start",
-    "webdriver": "webdriver-manager update && webdriver-manager start"
+    "webdriver": "webdriver-manager update --standalone --versions.standalone=3.8.0 && webdriver-manager start --versions.standalone=3.8.0"
   },
   "devDependencies": {
     "angular-mocks": "^1.7.3",
