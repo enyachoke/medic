@@ -16,7 +16,6 @@ env:
   matrix:
     - TEST_SUITE=standard NODE_VERSION=8 USE_COUCHDB=false USE_YARN=false
     - TEST_SUITE=normal NODE_VERSION=8 USE_COUCHDB=true USE_YARN=true
-    - TEST_SUITE=normal NODE_VERSION=9 USE_COUCHDB=true USE_YARN=true
     - TEST_SUITE=performance NODE_VERSION=8 USE_COUCHDB=true USE_YARN=true
   global:
     - COUCH_URL=http://admin:pass@localhost:5984/medic
@@ -44,21 +43,21 @@ before_script:
   - ./scripts/travis/couch-config
   - ./scripts/travis/yarn-init
 
-# script:
-#   - |
-#     if [[ "$TEST_SUITE" = 'normal' ]]; then
-#       node --stack_size=10000 `which grunt` ci-unit &&
-#       node --stack_size=10000 `which grunt` ci-integration-e2e
-#     elif [[ "$TEST_SUITE" = 'performance' ]]; then
-#       node --stack_size=10000 `which grunt` ci-performance
-#     elif [[ "$TEST_SUITE" = 'standard' ]]; then
-#       cd config/standard &&
-#       npm install &&
-#       npm run travis
-#     else
-#       echo "ERROR No or unknown value for TEST_SUITE env var ('${TEST_SUITE}')."
-#       exit 1
-#     fi
+script:
+  - |
+    if [[ "$TEST_SUITE" = 'normal' ]]; then
+      node --stack_size=10000 `which grunt` ci-unit &&
+      node --stack_size=10000 `which grunt` ci-integration-e2e
+    elif [[ "$TEST_SUITE" = 'performance' ]]; then
+      node --stack_size=10000 `which grunt` ci-performance
+    elif [[ "$TEST_SUITE" = 'standard' ]]; then
+      cd config/standard &&
+      npm install &&
+      npm run travis
+    else
+      echo "ERROR No or unknown value for TEST_SUITE env var ('${TEST_SUITE}')."
+      exit 1
+    fi
 
 jobs:
   include:
