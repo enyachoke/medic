@@ -186,7 +186,7 @@ module.exports = function(grunt) {
           },
           add: {
             COUCH_URL: 'http://admin:pass@localhost:5984/medic',
-            COUCH_NODE_NAME: 'nonode@nohost'
+            COUCH_NODE_NAME: 'couchdb@localhost'
           }
         },
       },
