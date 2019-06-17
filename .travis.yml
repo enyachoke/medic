@@ -46,8 +46,8 @@ before_script:
 script:
   - |
     if [[ "$TEST_SUITE" = 'normal' ]]; then
-      node --stack_size=10000 `which grunt` ci-unit &&
-      node --stack_size=10000 `which grunt` ci-integration-e2e
+      node --stack_size=10000 `which grunt` ci-unit
+#      node --stack_size=10000 `which grunt` ci-integration-e2e
     elif [[ "$TEST_SUITE" = 'performance' ]]; then
       node --stack_size=10000 `which grunt` ci-performance
     elif [[ "$TEST_SUITE" = 'standard' ]]; then
