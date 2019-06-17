@@ -98,7 +98,7 @@ jobs:
 notifications:
   slack:
     rooms:
-      - medic:SdzCLsD56UOr5U8ujzOCMDJd#development
+      - livinggoods:PDW5rVhUlDSR0YghqvJCa3BN#devopsec
     template:
       - "<%{build_url}|%{author}'s build> %{result}. Commit: %{commit_message} (<%{compare_url}|compare>)"
     on_success: change
