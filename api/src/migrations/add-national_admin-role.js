@@ -1,59 +1,61 @@
-const _ = require('underscore'),
-  { promisify } = require('util'),
-  db = require('../db-nano'),
-  logger = require('../logger'),
-  series = require('async/series');
+const request = require('request-promise-native');
+const url = require('url');
+const environment = require('../environment');
+const logger = require('../logger');
 
 const DEFAULT_STRUCTURE = {
   names: [],
   roles: [],
 };
 
-const addRole = (dbname, role, callback) =>
-  db.request(
-    {
-      db: dbname,
-      method: 'GET',
-      path: '_security',
+const addRole = (dbname, role) => {
+  return request.get({
+    url: url.format({
+      protocol: environment.protocol,
+      hostname: environment.host,
+      port: environment.port,
+      pathname: `${dbname}/_security`,
+    }),
+    auth: {
+      user: environment.username,
+      pass: environment.password
     },
-    (err, result) => {
-      if (err) {
-        return callback(err);
-      }
-
+    json: true
+  })
+    .then(body => {
       // In CouchDB 1.x, if you have not written to the _security object before
       // it is empty.
-      if (!result.admins) {
-        result.admins = DEFAULT_STRUCTURE;
+      if (!body.admins) {
+        body.admins = DEFAULT_STRUCTURE;
       }
 
-      if (!result.admins.roles.includes(role)) {
+      if (!body.admins.roles.includes(role)) {
         logger.info(`Adding ${role} role to ${dbname} admins`);
-        result.admins.roles.push(role);
+        body.admins.roles.push(role);
       }
-
-      db.request(
-        {
-          db: dbname,
-          method: 'PUT',
-          path: '_security',
-          body: result,
+      return request.put({
+        url: url.format({
+          protocol: environment.protocol,
+          hostname: environment.host,
+          port: environment.port,
+          pathname: `${dbname}/_security`,
+        }),
+        auth: {
+          user: environment.username,
+          pass: environment.password
         },
-        callback
-      );
-    }
-  );
+        json: true,
+        body: body
+      });
+    });
+};
 
 module.exports = {
   name: 'add-national_admin-role',
   created: new Date(2017, 3, 30),
-  run: promisify(callback =>
-    series(
-      [
-        _.partial(addRole, '_users', 'national_admin'),
-        _.partial(addRole, db.settings.db, 'national_admin'),
-      ],
-      callback
-    )
-  ),
+  run: () => {
+    return Promise.resolve()
+      .then(() => addRole('_users', 'national_admin'))
+      .then(() => addRole(environment.db, 'national_admin'));
+  }
 };

@@ -3,8 +3,7 @@ const _ = require('underscore'),
   constants = require('./constants'),
   http = require('http'),
   path = require('path'),
-  htmlScreenshotReporter = require('protractor-jasmine2-screenshot-reporter'),
-  userSettingsDocId = `org.couchdb.user:${auth.user}`;
+  htmlScreenshotReporter = require('protractor-jasmine2-screenshot-reporter');
 
 const PouchDB = require('pouchdb-core');
 PouchDB.plugin(require('pouchdb-adapter-http'));
@@ -156,9 +155,12 @@ const deleteAll = (except = []) => {
       ['translations', 'translations-backup', 'user-settings', 'info'].includes(
         doc.type
       ),
-    'appcache',
+    'service-worker-meta',
+    constants.USER_CONTACT_ID,
     'migration-log',
     'resources',
+    'branding',
+    'partners',
     'settings',
     /^_design/
   );
@@ -236,6 +238,28 @@ const refreshToGetNewSettings = () => {
     });
 };
 
+const setUserContactDoc = () => {
+  const {
+    DB_NAME: dbName,
+    USER_CONTACT_ID: docId,
+    DEFAULT_USER_CONTACT_DOC: defaultDoc
+  } = constants;
+
+  return module.exports.getDoc(docId)
+    .catch(() => ({}))
+    .then(existing => {
+      const rev = _.pick(existing, '_rev');
+      return _.extend(defaultDoc, rev);
+    })
+    .then(newDoc => request({
+      path: `/${dbName}/${docId}`,
+      body: JSON.stringify(newDoc),
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    }));
+};
+
+
 const revertDb = (except, ignoreRefresh) => {
   return revertSettings().then(needsRefresh => {
     return deleteAll(except).then(() => {
@@ -243,7 +267,7 @@ const revertDb = (except, ignoreRefresh) => {
       if (!ignoreRefresh && needsRefresh) {
         return refreshToGetNewSettings();
       }
-    });
+    }).then(setUserContactDoc);
   });
 };
 
@@ -317,7 +341,19 @@ module.exports = {
         path: options,
       };
     }
-    options.path = '/' + constants.DB_NAME + (options.path || '');
+
+    const pathAndReqType = `${options.path}${options.method}`;
+    if (pathAndReqType !== '/GET') {
+      options.path = '/' + constants.DB_NAME + (options.path || '');
+    }
+    return request(options, { debug: debug, notJson: notJson });
+  },
+
+  requestOnMedicDb: (options, debug, notJson) => {
+    if (typeof options === 'string') {
+      options = { path: options };
+    }
+    options.path = `/medic${options.path || ''}`;
     return request(options, { debug: debug, notJson: notJson });
   },
 
@@ -357,10 +393,33 @@ module.exports = {
     });
   },
 
+  getDocs: ids => {
+    return module.exports
+      .requestOnTestDb({
+        path: `/_all_docs?include_docs=true`,
+        method: 'POST',
+        body: { keys: ids || []},
+        headers: { 'content-type': 'application/json' },
+      })
+      .then(response => response.rows.map(row => row.doc));
+  },
+
   deleteDoc: id => {
     return module.exports.getDoc(id).then(doc => {
       doc._deleted = true;
       return module.exports.saveDoc(doc);
+    });
+  },
+
+  deleteDocs: ids => {
+    return module.exports.getDocs(ids).then(docs => {
+      docs.forEach(doc => doc._deleted = true);
+      return module.exports.requestOnTestDb({
+        path: '/_bulk_docs',
+        method: 'POST',
+        body: { docs },
+        headers: { 'content-type': 'application/json' },
+      });
     });
   },
 
@@ -377,6 +436,11 @@ module.exports = {
    * @return     {Promise}  completion promise
    */
   deleteAllDocs: deleteAll,
+
+  /*
+  * Sets the document referenced by the user's org.couchdb.user document to a default value
+  */
+  setUserContactDoc,
 
   /**
    * Update settings and refresh if required
@@ -406,13 +470,15 @@ module.exports = {
       }
     }),
 
-  seedTestData: (done, contactId, documents) => {
+  seedTestData: (done, userContactDoc, documents) => {
     protractor.promise
       .all(documents.map(module.exports.saveDoc))
-      .then(() => module.exports.getDoc(userSettingsDocId))
-      .then(user => {
-        user.contact_id = contactId;
-        return module.exports.saveDoc(user);
+      .then(() => module.exports.getDoc(constants.USER_CONTACT_ID))
+      .then(existingContactDoc => {
+        if (userContactDoc) {
+          _.extend(existingContactDoc, userContactDoc);
+          return module.exports.saveDoc(existingContactDoc);
+        }
       })
       .then(done)
       .catch(done.fail);
@@ -476,15 +542,14 @@ module.exports = {
       constants.COUCH_PORT
     }/${constants.DB_NAME}`,
 
+  getOrigin: () =>
+    `http://${constants.API_HOST}:${constants.API_PORT}`,
+
   getBaseUrl: () =>
-    `http://${constants.API_HOST}:${constants.API_PORT}/${
-      constants.DB_NAME
-    }/_design/medic/_rewrite/#/`,
+    `http://${constants.API_HOST}:${constants.API_PORT}/#/`,
 
   getAdminBaseUrl: () =>
-    `http://${constants.API_HOST}:${constants.API_PORT}/${
-      constants.DB_NAME
-    }/_design/medic-admin/_rewrite/#/`,
+    `http://${constants.API_HOST}:${constants.API_PORT}/admin/#/`,
 
   getLoginUrl: () =>
     `http://${constants.API_HOST}:${constants.API_PORT}/${

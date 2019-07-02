@@ -1,5 +1,5 @@
-const db = require('./src/db-pouch'),
-  serverChecks = require('@shared-libs/server-checks'),
+const environment = require('./src/environment'),
+  serverChecks = require('@medic/server-checks'),
   logger = require('./src/logger');
 
 process
@@ -13,11 +13,12 @@ process
     process.exit(1);
   });
 
-serverChecks.check(db.serverUrl).then(() => {
+serverChecks.check(environment.serverUrl).then(() => {
   const app = require('./src/routing'),
     config = require('./src/config'),
     migrations = require('./src/migrations'),
     ddocExtraction = require('./src/ddoc-extraction'),
+    resourceExtraction = require('./src/resource-extraction'),
     translations = require('./src/translations'),
     serverUtils = require('./src/server-utils'),
     apiPort = process.env.API_PORT || 5988;
@@ -26,6 +27,10 @@ serverChecks.check(db.serverUrl).then(() => {
     .then(() => logger.info('Extracting ddoc…'))
     .then(ddocExtraction.run)
     .then(() => logger.info('DDoc extraction completed successfully'))
+
+    .then(() => logger.info('Extracting resources…'))
+    .then(resourceExtraction.run)
+    .then(() => logger.info('Extracting resources completed successfully'))
 
     .then(() => logger.info('Loading configuration…'))
     .then(config.load)

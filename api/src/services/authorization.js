@@ -1,9 +1,9 @@
-const db = require('../db-pouch'),
+const db = require('../db'),
       auth = require('../auth'),
       _ = require('underscore'),
       config = require('../config'),
-      viewMapUtils = require('@shared-libs/view-map-utils'),
-      tombstoneUtils = require('@shared-libs/tombstone-utils');
+      viewMapUtils = require('@medic/view-map-utils'),
+      tombstoneUtils = require('@medic/tombstone-utils');
 
 const ALL_KEY = '_all', // key in the docs_by_replication_key view for records everyone can access
       UNASSIGNED_KEY = '_unassigned'; // key in the docs_by_replication_key view for unassigned records
@@ -52,7 +52,7 @@ const exclude = (array, ...values) => {
 // @param   {Array}   authorizationContext.subjectIds - allowed subjectIds.
 // @param   {Array}   viewValues.contactsByDepth - results of `medic/contacts_by_depth` view against doc
 // @returns {Boolean} whether new subjectIds were added to authorizationContext
-const updateContext = (allowed, authorizationContext, { replicationKeys, contactsByDepth }) => {
+const updateContext = (allowed, authorizationContext, { contactsByDepth }) => {
   if (contactsByDepth && contactsByDepth.length) {
     //first element of `contactsByDepth` contains both `subjectId` and `docID`
     const [[[ docId ], subjectId ]] = contactsByDepth;
@@ -182,6 +182,7 @@ const getAuthorizationContext = (userCtx) => {
       }
     });
 
+    authorizationCtx.subjectIds = _.uniq(authorizationCtx.subjectIds);
     authorizationCtx.subjectIds.push(ALL_KEY);
     if (hasAccessToUnassignedDocs(userCtx)) {
       authorizationCtx.subjectIds.push(UNASSIGNED_KEY);
@@ -207,10 +208,28 @@ const isSensitive = function(userCtx, subject, submitter, allowedSubmitter) {
 
 const getAllowedDocIds = (feed) => {
   return db.medic.query('medic/docs_by_replication_key', { keys: feed.subjectIds }).then(results => {
-    const validatedIds = ['_design/medic-client', 'org.couchdb.user:' + feed.userCtx.name];
+    const validatedIds = ['_design/medic-client', 'org.couchdb.user:' + feed.userCtx.name],
+          tombstoneIds = [];
+
     results.rows.forEach(row => {
-      if (!isSensitive(feed.userCtx, row.key, row.value.submitter, feed.subjectIds.indexOf(row.value.submitter) !== -1)) {
-        validatedIds.push(row.id);
+      if (isSensitive(feed.userCtx, row.key, row.value.submitter, feed.subjectIds.indexOf(row.value.submitter) !== -1)) {
+        return;
+      }
+
+      if (tombstoneUtils.isTombstoneId(row.id)) {
+        tombstoneIds.push(row.id);
+        return;
+      }
+
+      validatedIds.push(row.id);
+    });
+
+    // only include tombstones if the winning rev of the document is deleted
+    // if a doc appears in the view results, it means that the winning rev is not deleted
+    tombstoneIds.forEach(tombstoneId => {
+      const docId = tombstoneUtils.extractStub(tombstoneId).id;
+      if (!validatedIds.includes(docId)) {
+        validatedIds.push(tombstoneId);
       }
     });
 

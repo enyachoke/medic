@@ -1,4 +1,5 @@
 [
+<<<<<<< HEAD
   {"from": "/css/*",              "to": "css/*"},
   {"from": "/js/*",               "to": "js/*"},
   {"from": "/audio/*",            "to": "audio/*"},
@@ -12,4 +13,7 @@
   {"from": "/",                   "to": "templates/inbox.html"},
   {"from": "#/*",                 "to": "templates/inbox.html"},
   {"from": "/#/*",                "to": "templates/inbox.html"}
+=======
+  {"from": "/manifest.appcache",  "to": "manifest.appcache"}
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
 ]

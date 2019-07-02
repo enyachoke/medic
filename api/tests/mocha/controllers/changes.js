@@ -2,13 +2,18 @@ const sinon = require('sinon'),
       auth = require('../../../src/auth'),
       controller = require('../../../src/controllers/changes'),
       authorization = require('../../../src/services/authorization'),
-      tombstoneUtils = require('@shared-libs/tombstone-utils'),
-      db = require('../../../src/db-pouch'),
+      tombstoneUtils = require('@medic/tombstone-utils'),
+      db = require('../../../src/db'),
       inherits = require('util').inherits,
       EventEmitter = require('events'),
       _ = require('underscore'),
       config = require('../../../src/config'),
+<<<<<<< HEAD
       serverChecks = require('@shared-libs/server-checks');
+=======
+      serverChecks = require('@medic/server-checks'),
+      environment = require('../../../src/environment');
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
 
 require('chai').should();
 let testReq,
@@ -169,7 +174,11 @@ describe('Changes controller', () => {
     });
 
     it('should check if changes requests can be limited', () => {
+<<<<<<< HEAD
       db.serverUrl = 'someURL';
+=======
+      environment.serverUrl = 'someURL';
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       serverChecks.getCouchDbVersion.resolves('2.2.0');
       return controller._init().then(() => {
         serverChecks.getCouchDbVersion.callCount.should.equal(1);
@@ -179,7 +188,11 @@ describe('Changes controller', () => {
     });
 
     it('should check if changes requests can be limited', () => {
+<<<<<<< HEAD
       db.serverUrl = 'someOtherURL';
+=======
+      environment.serverUrl = 'someOtherURL';
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       serverChecks.getCouchDbVersion.resolves('2.3.0');
       return controller._init().then(() => {
         serverChecks.getCouchDbVersion.callCount.should.equal(1);
@@ -460,6 +473,7 @@ describe('Changes controller', () => {
         .then(() => {
           controller._getContinuousFeed().emit('change', { id: 9, changes: [], doc: { _id: 9 }, seq: 6 }, 0, 6);
         })
+        .then(nextTick)
         .then(() => {
           const feed = controller._getNormalFeeds()[0];
           feed.pendingChanges.length.should.equal(3);
@@ -483,6 +497,8 @@ describe('Changes controller', () => {
             ],
             last_seq: 3
           }));
+<<<<<<< HEAD
+=======
           testRes.end.callCount.should.equal(1);
           controller._getNormalFeeds().length.should.equal(0);
           controller._getLongpollFeeds().length.should.equal(0);
@@ -547,6 +563,7 @@ describe('Changes controller', () => {
             ],
             last_seq: 3
           }));
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
           testRes.end.callCount.should.equal(1);
           controller._getNormalFeeds().length.should.equal(0);
           controller._getLongpollFeeds().length.should.equal(0);
@@ -556,6 +573,73 @@ describe('Changes controller', () => {
             { change: { id: 7, changes: [], seq: 4 }, id: 7, viewResults: {} },
             { change: { id: 8, changes: [], seq: 5 }, id: 8, viewResults: {} },
             { change: { id: 9, changes: [], seq: 6 }, id: 9, viewResults: {} }
+<<<<<<< HEAD
+          ]);
+        });
+    });
+
+    it('pushes allowed pending changes to the results, updating their seq when batching', () => {
+      const validatedIds = Array.from({length: 101}, () => Math.floor(Math.random() * 101));
+      serverChecks.getCouchDbVersion.resolves('2.3.0');
+      authorization.getAllowedDocIds.resolves(validatedIds);
+      authorization.filterAllowedDocs.returns([
+        { change: { id: 8, changes: [], seq: 8 }, id: 8, viewResults: {} },
+        { change: { id: 9, changes: [], seq: 9 }, id: 9, viewResults: {} }
+      ]);
+      testReq.query = { since: 0 };
+
+      controller.request(testReq, testRes);
+
+      const expected = {
+        results: [{ id: 1, changes: [], seq: 1 }, { id: 2, changes: [], seq: 2 }, { id: 3, changes: [], seq: 3 }],
+        last_seq: 3
+      };
+
+      return nextTick()
+        .then(() => {
+          controller._getContinuousFeed().emit('change', { id: 7, changes: [], doc: { _id: 7 }, seq: 4 }, 0, 4);
+        })
+        .then(() => {
+          controller._getContinuousFeed().emit('change', { id: 8, changes: [], doc: { _id: 8 }, seq: 5 }, 0, 5);
+        })
+        .then(() => {
+          controller._getContinuousFeed().emit('change', { id: 9, changes: [], doc: { _id: 9 }, seq: 6 }, 0, 6);
+        })
+        .then(nextTick)
+        .then(() => {
+          const feed = controller._getNormalFeeds()[0];
+          feed.pendingChanges.length.should.equal(3);
+          feed.pendingChanges.should.deep.equal([
+            { change: { id: 7, changes: [], seq: 4 }, id: 7, viewResults: {} },
+            { change: { id: 8, changes: [], seq: 5 }, id: 8, viewResults: {} },
+            { change: { id: 9, changes: [], seq: 6 }, id: 9, viewResults: {} }
+          ]);
+          feed.upstreamRequest.complete(null, expected);
+        })
+        .then(nextTick)
+        .then(() => {
+          testRes.write.callCount.should.equal(1);
+          testRes.write.args[0][0].should.equal(JSON.stringify({
+            results: [
+              { id: 1, changes: [], seq: 1 },
+              { id: 2, changes: [], seq: 2 },
+              { id: 3, changes: [], seq: 3 },
+              { id: 8, changes: [], seq: 3 },
+              { id: 9, changes: [], seq: 3 }
+            ],
+            last_seq: 3
+          }));
+          testRes.end.callCount.should.equal(1);
+          controller._getNormalFeeds().length.should.equal(0);
+          controller._getLongpollFeeds().length.should.equal(0);
+          authorization.allowedDoc.callCount.should.equal(0);
+          authorization.filterAllowedDocs.callCount.should.equal(1);
+          authorization.filterAllowedDocs.args[0][1].should.deep.equal([
+            { change: { id: 7, changes: [], seq: 4 }, id: 7, viewResults: {} },
+            { change: { id: 8, changes: [], seq: 5 }, id: 8, viewResults: {} },
+            { change: { id: 9, changes: [], seq: 6 }, id: 9, viewResults: {} }
+=======
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
           ]);
         });
     });

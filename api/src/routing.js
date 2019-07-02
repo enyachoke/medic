@@ -3,12 +3,13 @@ const _ = require('underscore'),
   express = require('express'),
   morgan = require('morgan'),
   helmet = require('helmet'),
-  db = require('./db-nano'),
+  environment = require('./environment'),
+  db = require('./db'),
   path = require('path'),
   auth = require('./auth'),
   logger = require('./logger'),
   isClientHuman = require('./is-client-human'),
-  target = 'http://' + db.settings.host + ':' + db.settings.port,
+  target = 'http://' + environment.host + ':' + environment.port,
   proxy = require('http-proxy').createProxyServer({ target: target }),
   proxyForAuth = require('http-proxy').createProxyServer({
     target: target,
@@ -32,15 +33,16 @@ const _ = require('underscore'),
   authorization = require('./middleware/authorization'),
   createUserDb = require('./controllers/create-user-db'),
   staticResources = /\/(templates|static)\//,
-  favicon = /\/icon_\d+.ico$/,
   // CouchDB is very relaxed in matching routes
-  routePrefix = '/+' + db.settings.db + '/+',
-  pathPrefix = '/' + db.settings.db + '/',
-  appPrefix = pathPrefix + '_design/' + db.settings.ddoc + '/_rewrite/',
+  routePrefix = '/+' + environment.db + '/+',
+  pathPrefix = '/' + environment.db + '/',
+  appPrefix = pathPrefix + '_design/' + environment.ddoc + '/_rewrite/',
+  adminAppPrefix = pathPrefix + '_design/medic-admin/_rewrite/',
   serverUtils = require('./server-utils'),
-  appcacheManifest = /\/manifest\.appcache$/,
-  uuid = require('uuid/v4'),
+  uuid = require('uuid'),
   compression = require('compression'),
+  BUILDS_DB = 'https://staging.dev.medicmobile.org/_couch/builds/', // jshint ignore:line
+  extractedResourceDirectory = require('./resource-extraction').getDestinationDirectory(),
   app = express();
 
 // requires content-type application/json header
@@ -96,6 +98,7 @@ app.use((req, res, next) => {
   req.id = uuid.v4();
   next();
 });
+
 morgan.token('id', req => req.id);
 app.use(
   morgan('REQ :id :remote-addr :remote-user :method :url HTTP/:http-version', {
@@ -114,8 +117,32 @@ app.use(
     hpkp: false, // explicitly block dangerous header
     contentSecurityPolicy: {
       directives: {
-        frameSrc: ['\'self\''] // prettier-ignore
+        defaultSrc: [`'none'`],
+        fontSrc: [`'self'`],
+        manifestSrc: [`'self'`],
+        connectSrc: [
+          `'self'`,
+          BUILDS_DB,
+        ],
+        childSrc:  [`'self'`],
+        formAction: [`'self'`],
+        imgSrc: [
+          `'self'`,
+          'data:', // unsafe
+          'blob:',
+        ],
+        mediaSrc: [`'self'`],
+        scriptSrc: [
+          `'self'`,
+          `'sha256-6i0jYw/zxQO6q9fIxqI++wftTrPWB3yxt4tQqy6By6k='`, // Explicitly allow the telemetry script setting startupTimes
+          `'unsafe-eval'` // AngularJS and several dependencies require this
+        ],
+        styleSrc: [
+          `'self'`,
+          `'unsafe-inline'` // angular-ui-bootstrap
+        ],
       },
+      browserSniff: false,
     },
   })
 );
@@ -123,22 +150,69 @@ app.use(
 // requires `req` header `Accept-Encoding` to be `gzip` or `deflate`
 // requires `res` `Content-Type` to be compressible (see https://github.com/jshttp/mime-db/blob/master/db.json)
 // default threshold is 1KB
-app.use(compression());
+
+const additionalCompressibleTypes = ['application/x-font-ttf','font/ttf'];
+app.use(compression({
+  filter: (req, res) => {
+    if (additionalCompressibleTypes.includes(res.getHeader('Content-Type'))) {
+      return true;
+    }
+    // fallback to standard filter function
+    return compression.filter(req, res);
+  }
+}));
 
 // TODO: investigate blocking writes to _users from the outside. Reads maybe as well, though may be harder
-//       https://github.com/medic/medic-webapp/issues/4089
+//       https://github.com/medic/medic/issues/4089
 
 app.get('/', function(req, res) {
   if (req.headers.accept === 'application/json') {
-    // couchdb request - let it go
+    // CouchDB request for /dbinfo from previous versions
+    // Required for service compatibility during upgrade.
     proxy.web(req, res);
   } else {
-    // redirect to the app path - redirect to _rewrite
-    res.redirect(appPrefix);
+    res.sendFile(path.join(extractedResourceDirectory, 'templates/inbox.html'));
   }
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.get('/dbinfo', (req, res) => {
+  req.url = '/';
+  proxy.web(req, res);
+});
+
+app.get([`/medic/_design/medic/_rewrite/`, appPrefix], (req, res) => res.sendFile(path.join(__dirname, 'public/appcache-upgrade.html')));
+
+app.all('/+medic(/*)?', (req, res, next) => {
+  if (environment.db !== 'medic') {
+    req.url = req.url.replace(/\/medic\/?/, pathPrefix);
+  }
+  next();
+});
+
+app.all('/+admin(/*)?', (req, res, next) => {
+  req.url = req.url.replace(/\/admin\/?/, adminAppPrefix);
+  next();
+});
+
+app.get('/favicon.ico', (req, res) => {
+  // Cache for a week. Normally we don't interfere with couch headers, but
+  // due to Chrome (including Android WebView) aggressively requesting
+  // favicons on every page change and window.history update
+  // ( https://github.com/medic/medic/issues/1913 ), we have to
+  // stage an intervention
+  writeHeaders(req, res, [['Cache-Control', 'public, max-age=604800']]);
+  db.medic.get('branding').then(doc => {
+    db.medic.getAttachment(doc._id, doc.resources.favicon).then(blob => {
+      res.send(blob);
+    });
+  }).catch(err => {
+    res.sendFile('resources/ico/favicon.ico' , { root : __dirname });
+    logger.warn('Branding doc or/and favicon missing: %o', err);
+  });
+});
+
+app.use(express.static(path.join(__dirname, '../build/public')));
+app.use(express.static(extractedResourceDirectory));
 app.get(routePrefix + 'login', login.get);
 app.get(routePrefix + 'login/identity', login.getIdentity);
 app.postJson(routePrefix + 'login', login.post);
@@ -221,16 +295,17 @@ app.get('/api/info', function(req, res) {
 });
 
 app.get('/api/auth/:path', function(req, res) {
-  auth.checkUrl(req, function(err, output) {
-    if (err) {
-      return serverUtils.serverError(err, req, res);
-    }
-    if (output.status >= 400 && output.status < 500) {
-      res.status(403).send('Forbidden');
-    } else {
-      res.json(output);
-    }
-  });
+  auth.checkUrl(req)
+    .then(status => {
+      if (status && status >= 400 && status < 500) {
+        res.status(403).send('Forbidden');
+      } else {
+        res.json({ status: status });
+      }
+    })
+    .catch(err => {
+      serverUtils.serverError(err, req, res);
+    });
 });
 
 app.post('/api/v1/upgrade', jsonParser, upgrade.upgrade);
@@ -258,10 +333,8 @@ app.postJson('/api/sms', function(req, res) {
     .catch(err => serverUtils.error(err, req, res));
 });
 
-app.all('/api/v1/export/:type/:form?', exportData.routeV1);
-app.all(`/${db.getPath()}/export/:type/:form?`, exportData.routeV1);
-app.get('/api/v2/export/:type', exportData.routeV2);
-app.postJson('/api/v2/export/:type', exportData.routeV2);
+app.get('/api/v2/export/:type', exportData.get);
+app.postJson('/api/v2/export/:type', exportData.get);
 
 app.post('/api/v1/records', [jsonParser, formParser], records.v1);
 app.post('/api/v2/records', [jsonParser, formParser], records.v2);
@@ -317,10 +390,10 @@ app.postJson('/api/v1/people', function(req, res) {
 
 app.postJson('/api/v1/bulk-delete', bulkDocs.bulkDelete);
 
-app.get(`${appPrefix}app_settings/${db.settings.ddoc}/:path?`, settings.getV0); // deprecated
+app.get(`${appPrefix}app_settings/${environment.ddoc}/:path?`, settings.getV0); // deprecated
 app.get('/api/v1/settings', settings.get);
 
-app.putJson(`${appPrefix}update_settings/${db.settings.ddoc}`, settings.put); // deprecated
+app.putJson(`${appPrefix}update_settings/${environment.ddoc}`, settings.put); // deprecated
 app.putJson('/api/v1/settings', settings.put);
 
 // authorization middleware to proxy online users requests directly to CouchDB
@@ -337,13 +410,11 @@ const changesHandler = require('./controllers/changes').request,
 
 app.get(
   changesPath,
-  authorization.checkAuth,
   onlineUserChangesProxy,
   changesHandler
 );
 app.post(
   changesPath,
-  authorization.checkAuth,
   onlineUserChangesProxy,
   jsonParser,
   changesHandler
@@ -353,10 +424,9 @@ app.post(
 const allDocsHandler = require('./controllers/all-docs').request,
   allDocsPath = routePrefix + '_all_docs(/*)?';
 
-app.get(allDocsPath, authorization.checkAuth, onlineUserProxy, allDocsHandler);
+app.get(allDocsPath, onlineUserProxy, allDocsHandler);
 app.post(
   allDocsPath,
-  authorization.checkAuth,
   onlineUserProxy,
   jsonParser,
   allDocsHandler
@@ -366,7 +436,6 @@ app.post(
 const bulkGetHandler = require('./controllers/bulk-get').request;
 app.post(
   routePrefix + '_bulk_get(/*)?',
-  authorization.checkAuth,
   onlineUserProxy,
   jsonParser,
   bulkGetHandler
@@ -376,7 +445,6 @@ app.post(
 // this is an audited endpoint: online and filtered offline requests will pass through to the audit route
 app.post(
   routePrefix + '_bulk_docs(/*)?',
-  authorization.checkAuth,
   authorization.onlineUserPassThrough, // online user requests pass through to the next route
   jsonParser,
   bulkDocs.request,
@@ -392,21 +460,18 @@ const dbDocHandler = require('./controllers/db-doc'),
 
 app.get(
   ddocPath,
-  authorization.checkAuth,
   onlineUserProxy,
-  _.partial(dbDocHandler.requestDdoc, db.settings.ddoc),
+  _.partial(dbDocHandler.requestDdoc, environment.ddoc),
   authorization.setAuthorized // adds the `authorized` flag to the `req` object, so it passes the firewall
 );
 
 app.get(
   docPath,
-  authorization.checkAuth,
   onlineUserProxy, // online user GET requests are proxied directly to CouchDB
   dbDocHandler.request
 );
 app.post(
   routePrefix,
-  authorization.checkAuth,
   authorization.onlineUserPassThrough, // online user requests pass through to the next route
   jsonParser, // request body must be json
   dbDocHandler.request,
@@ -414,7 +479,6 @@ app.post(
 );
 app.put(
   docPath,
-  authorization.checkAuth,
   authorization.onlineUserPassThrough, // online user requests pass through to the next route,
   jsonParser,
   dbDocHandler.request,
@@ -422,14 +486,12 @@ app.put(
 );
 app.delete(
   docPath,
-  authorization.checkAuth,
   authorization.onlineUserPassThrough, // online user requests pass through to the next route,
   dbDocHandler.request,
   authorization.setAuthorized // adds the `authorized` flag to the `req` object, so it passes the firewall
 );
 app.all(
   attachmentPath,
-  authorization.checkAuth,
   authorization.onlineUserPassThrough, // online user requests pass through to the next route
   dbDocHandler.request,
   authorization.setAuthorized // adds the `authorized` flag to the `req` object, so it passes the firewall
@@ -500,27 +562,26 @@ const copyProxyHeaders = (proxyRes, res) => {
   }
 };
 
+/*
+A service worker can't have a scope broader than its own location.
+To give our service worker control of all resources, create an alias at root.
+*/
+app.get('/service-worker.js', (req, res) => {
+  writeHeaders(req, res, [
+    // For users before Chrome 68 https://developers.google.com/web/updates/2018/06/fresher-sw
+    ['Cache-Control', 'max-age=0'],
+    ['Content-Type', 'application/javascript'],
+  ]);
+
+  res.sendFile(path.join(extractedResourceDirectory, 'js/service-worker.js'));
+});
+
 /**
  * Set cache control on static resources. Must be hacked in to
  * ensure we set the value first.
  */
 proxy.on('proxyReq', function(proxyReq, req, res) {
-  if (favicon.test(req.url)) {
-    // Cache for a week.  Normally we don't interferse with couch headers, but
-    // due to Chrome (including Android WebView) aggressively requesting
-    // favicons on every page change and window.history update
-    // (https://github.com/medic/medic-webapp/issues/1913 ), we have to stage an
-    // intervention:
-    writeHeaders(req, res, [['Cache-Control', 'public, max-age=604800']]);
-  } else if (appcacheManifest.test(req.url)) {
-    // requesting the appcache manifest
-    writeHeaders(req, res, [
-      ['Cache-Control', 'must-revalidate'],
-      ['Content-Type', 'text/cache-manifest; charset=utf-8'],
-      ['Last-Modified', 'Tue, 28 Apr 2015 02:23:40 GMT'],
-      ['Expires', 'Tue, 28 Apr 2015 02:21:40 GMT'],
-    ]);
-  } else if (
+  if (
     !staticResources.test(req.url) &&
     req.url.indexOf(appPrefix) !== -1
   ) {
@@ -610,7 +671,7 @@ proxyForAuth.on('proxyRes', (proxyRes, req, res) => {
   copyProxyHeaders(proxyRes, res);
 
   if (res.interceptResponse) {
-    let body = new Buffer('');
+    let body = Buffer.from('');
     proxyRes.on('data', data => (body = Buffer.concat([body, data])));
     proxyRes.on('end', () => res.interceptResponse(req, res, body.toString()));
   } else {

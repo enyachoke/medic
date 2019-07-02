@@ -2,8 +2,6 @@
 
   'use strict';
 
-  var inboxServices = angular.module('inboxServices');
-
   var getWithRemoteFallback = function(DB, id) {
     return DB()
       .get(id)
@@ -13,10 +11,7 @@
       });
   };
 
-  // If the user has role district_admin, returns their facility_id.
-  // If the user is admin, return undefined.
-  // Else throw error.
-  inboxServices.factory('UserDistrict',
+  angular.module('inboxServices').factory('UserSettings',
     function(
       $q,
       DB,
@@ -24,45 +19,26 @@
     ) {
       'ngInject';
 
-      return function() {
-        var userCtx = Session.userCtx();
-        if (!userCtx || !userCtx.name) {
-          return $q.reject(new Error('Not logged in'));
+      const userDocId = function () {
+        const userCtx = Session.userCtx();
+        if (userCtx) {
+          return 'org.couchdb.user:' + userCtx.name;
         }
-        if (Session.isOnlineOnly(userCtx)) {
-          return $q.resolve();
-        }
-        return getWithRemoteFallback(DB, 'org.couchdb.user:' + userCtx.name)
-          .then(function(user) {
-            if (!user.facility_id) {
-              return $q.reject(new Error('No district assigned to district admin.'));
-            }
-            return user.facility_id;
-          })
-          .then(function(facilityId) {
-            // ensure the facility exists
-            return getWithRemoteFallback(DB, facilityId)
-              .then(function() {
-                return facilityId;
-              });
-          });
       };
-    }
-  );
 
-  inboxServices.factory('UserSettings',
-    function(
-      $q,
-      DB,
-      Session
-    ) {
-      'ngInject';
+      let userDoc;
       return function() {
-        var userCtx = Session.userCtx();
-        if (!userCtx) {
+        if (userDoc) {
+          return userDoc;
+        }
+
+        const docId = userDocId();
+        if (!docId) {
           return $q.reject(new Error('UserCtx not found'));
         }
-        return getWithRemoteFallback(DB, 'org.couchdb.user:' + userCtx.name);
+      
+        userDoc = getWithRemoteFallback(DB, docId);
+        return userDoc;
       };
     }
   );

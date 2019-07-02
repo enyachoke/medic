@@ -1,4 +1,4 @@
-const db = require('../db-pouch'),
+const db = require('../db'),
       authorization = require('./authorization'),
       _ = require('underscore');
 
@@ -16,7 +16,7 @@ const getRequestIds = (query, body) => {
   }
 
   if (query && query.key) {
-    return [ query.key ];
+    return [ JSON.parse(query.key) ]; // PouchDB stringifies before requesting
   }
 };
 

@@ -1,10 +1,10 @@
 angular.module('controllers').controller('ImportTranslationCtrl',
   function (
     $scope,
-    $translate,
     $uibModalInstance,
     FileReader,
-    ImportProperties
+    ImportProperties,
+    Translate
   ) {
 
     'use strict';
@@ -16,12 +16,10 @@ angular.module('controllers').controller('ImportTranslationCtrl',
       $scope.validationError = null;
       var file = $('#import-translation [name="translations"]').prop('files')[0];
       if (!file) {
-        $translate('Translation file').then(function(fieldName) {
-          $translate('field is required', { field: fieldName })
-            .then(function(message) {
-              $scope.validationError = message;
-            });
-        });
+        Translate.fieldIsRequired('Translation file')
+          .then(function(message) {
+            $scope.validationError = message;
+          });
         return;
       }
       $scope.setProcessing();

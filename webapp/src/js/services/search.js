@@ -1,15 +1,13 @@
 var _ = require('underscore'),
     moment = require('moment'),
-    Search = require('search');
+    Search = require('@medic/search');
 
 (function () {
 
   'use strict';
 
-  var inboxServices = angular.module('inboxServices');
-
   // To make it easier to mock out
-  inboxServices.factory('SearchFactory',
+  angular.module('inboxServices').factory('SearchFactory',
     function(
       $q,
       DB
@@ -23,15 +21,21 @@ var _ = require('underscore'),
     }
   );
 
-  inboxServices.factory('Search',
+  angular.module('inboxServices').factory('Search',
     function(
       $log,
       $q,
+      CalendarInterval,
       DB,
       GetDataRecords,
       SearchFactory,
+<<<<<<< HEAD
       CalendarInterval,
       Session
+=======
+      Session,
+      Telemetry
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     ) {
 
       'ngInject';
@@ -136,9 +140,19 @@ var _ = require('underscore'),
         if (!options.force && debounce(type, filters, options)) {
           return $q.resolve([]);
         }
-
+        const before = performance.now();
         return _search(type, filters, options, extensions)
           .then(function(searchResults) {
+            const timing = performance.now() - before;
+            const filterKeys = Object.keys(filters).filter(f => filters[f]).sort();
+            const telemetryKey = ['search', type, ...filterKeys].join(':');
+            // Will end up with entries like:
+            //   search:reports:search                      <-- text search of reports
+            //   search:reports:date:search:valid:verified  <-- maximum selected search of reports with text search
+            //   search:contacts:search                     <-- text search of contacts
+            //   search:contacts:types                      <-- default viewing of contact list
+            Telemetry.record(telemetryKey, timing);
+
             if (docIds && docIds.length) {
               docIds.forEach(function(docId) {
                 if (searchResults.docIds.indexOf(docId) === -1) {

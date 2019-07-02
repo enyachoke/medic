@@ -33,6 +33,13 @@
         <td>
           <p ng-if="message.task"><strong>{{message.task}}</strong></p>
           <span>{{message.content}}</span>
+<<<<<<< HEAD
+=======
+          <div class="message-error" ng-if="message.error">
+            <span translate>messages.errors.invalid</span>
+            <span translate>{{message.error}}</span>
+          </div>
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
         </td>
         <td>
           <span class="message-state {{message.state}}" ng-class="{ delayed: message.delayed, 'has-error': message.error }" translate>

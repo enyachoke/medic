@@ -19,6 +19,8 @@
 @import 'content-list';
 
 @import 'enketo/medic';
+@import 'messages';
+@import 'common';
 
 .container-fluid {
   overflow: hidden;
@@ -72,6 +74,9 @@ body {
     }
     .page {
       top: 75px;
+    }
+    .partners > h3 {
+      margin-top: 100px;
     }
   }
   &.error {
@@ -275,8 +280,10 @@ body {
 }
 
 .header .dropdown-menu .sync-status {
-  .in_progress,
-  .not_required {
+  .no-click {
+    color: @label-color;
+  }
+  .success {
     color: @ok-color;
   }
   .required {
@@ -657,6 +664,13 @@ body {
       color: @failed-state-color;
     }
   }
+
+  &.has-error .state.scheduled {
+    &,
+    &:before {
+      color: @failed-state-color;
+    }
+  }
 }
 
 .item-content {
@@ -825,16 +839,6 @@ a.fa:hover {
 .tasks .warning {
   overflow: initial;
   color: @high-risk-color;
-}
-
-.sender {
-  .position {
-    color: @label-color;
-    white-space: normal;
-  }
-  .name {
-    font-weight: bold;
-  }
 }
 
 .action-container {
@@ -1034,22 +1038,6 @@ a.fa:hover {
   z-index: 1050;
 }
 
-.select2-results,
-.select2-choice {
-  .sender span {
-    margin-right: 10px;
-  }
-  .everyone-at {
-    font-weight: bold;
-  }
-  .fa {
-    color: @ok-color;
-  }
-}
-.select2-results .select2-highlighted .sender .position {
-  color: #ffffff;
-}
-
 .screenshot {
   text-align: center;
   margin-top: 10px;
@@ -1094,21 +1082,21 @@ a.fa:hover {
       padding-top: 100px;
     }
     .contact-pregnant {
-      background-image: url('../img/icon-pregnant.svg');
+      background-image: url('/img/icon-pregnant.svg');
       &.selected {
-        background-image: url('../img/icon-pregnant-selected.svg');
+        background-image: url('/img/icon-pregnant-selected.svg');
       }
     }
     .contact-chw {
-      background-image: url('../img/icon-chw.svg');
+      background-image: url('/img/icon-chw.svg');
       &.selected {
-        background-image: url('../img/icon-chw-selected.svg');
+        background-image: url('/img/icon-chw-selected.svg');
       }
     }
     .contact-nurse {
-      background-image: url('../img/icon-nurse.svg');
+      background-image: url('/img/icon-nurse.svg');
       &.selected {
-        background-image: url('../img/icon-nurse-selected.svg');
+        background-image: url('/img/icon-nurse-selected.svg');
       }
     }
   }
@@ -1164,19 +1152,6 @@ a.fa:hover {
     border: 0;
     width: 100%;
   }
-}
-
-.lineage {
-  margin-bottom: 0;
-  li:after {
-    content: '\2022'; /* bullet */
-    padding: 0 5px;
-  }
-}
-
-.lineage li:last-child:after {
-  content: '';
-  padding: 0;
 }
 
 .simprints-stars {

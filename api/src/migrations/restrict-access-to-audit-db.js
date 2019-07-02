@@ -1,31 +1,35 @@
-const db = require('../db-nano'),
-      {promisify} = require('util');
+const request = require('request-promise-native'),
+      url = require('url'),
+      environment = require('../environment');
 
-const addMemberToDb = (callback) => {
+const addMemberToDb = () => {
   const securityObject = {
     admins: { names:[], roles: ['audit-writer'] },
     members: { names: [], roles:['audit-writer'] }
   };
-  db.request(
-    {
-      db: db.settings.auditDb,
-      path: '/_security',
-      method: 'put',
-      body: securityObject
+  return request.put({
+    url: url.format({
+      protocol: environment.protocol,
+      hostname: environment.host,
+      port: environment.port,
+      pathname: `${environment.db}-audit/_security`,
+    }),
+    auth: {
+      user: environment.username,
+      pass: environment.password
     },
-    callback);
+    json: true,
+    body: securityObject
+  });
 };
 
 module.exports = {
   name: 'restrict-access-to-audit-db',
   created: new Date(2017, 5, 8),
-  run: promisify(callback => {
-    addMemberToDb((err) => {
-      if (err) {
-        return callback(new Error('Failed to add member to audit db.' +
-          JSON.stringify(err, null, 2)));
-      }
-      callback();
+  run: () => {
+    return addMemberToDb().catch(err => {
+      return Promise.reject(new Error('Failed to add member to audit db.' +
+        JSON.stringify(err, null, 2)));
     });
-  })
+  }
 };

@@ -1,6 +1,6 @@
 var url = require('url'),
   path = require('path'),
-  db = require('./db-nano'),
+  environment = require('./environment'),
   isClientHuman = require('./is-client-human'),
   logger = require('./logger'),
   MEDIC_BASIC_AUTH = 'Basic realm="Medic Mobile Web Services"';
@@ -52,7 +52,12 @@ module.exports = {
     if (typeof err === 'string') {
       return module.exports.serverError(err, req, res);
     }
-    var code = err.code || err.statusCode || err.status || 500;
+    // https://github.com/nodejs/node/issues/9027
+    let code = err.code || err.statusCode || err.status || 500;
+    if (!Number.isInteger(code)) {
+      logger.warn(`Non-numeric error code: ${code}`);
+      code = 500;
+    }
     if (code === 401) {
       return module.exports.notLoggedIn(req, res, showPrompt);
     }
@@ -79,7 +84,7 @@ module.exports = {
     // web access - redirect humans to login page; prompt others for basic auth
     if (isClientHuman(req)) {
       var redirectUrl = url.format({
-        pathname: path.join('/', db.settings.db, 'login'),
+        pathname: path.join('/', environment.db, 'login'),
         query: { redirect: req.url },
       });
       res.redirect(302, redirectUrl);

@@ -1,11 +1,13 @@
+var translationUtils = require('@medic/translation-utils');
+
 var DEFAULT_LOCALE = 'en',
     DOC_ID_PREFIX = 'messages-';
 
 angular.module('inboxServices').factory('TranslationLoader',
   function(
     $q,
-    Settings,
-    DB
+    DB,
+    Settings
   ) {
     'use strict';
     'ngInject';
@@ -25,7 +27,7 @@ angular.module('inboxServices').factory('TranslationLoader',
       });
     };
 
-    return function(options) {
+    const service = (options) => {
       var testing = false;
       if (options.key === 'test') {
         options.key = 'en';
@@ -36,10 +38,11 @@ angular.module('inboxServices').factory('TranslationLoader',
           return DB().get(DOC_ID_PREFIX + locale);
         })
         .then(function(doc) {
+          let values = Object.assign(doc.generic || {}, doc.custom || {});
           if (testing) {
-            mapTesting(doc.values);
+            mapTesting(values);
           }
-          return doc.values;
+          return translationUtils.loadTranslations(values);
         })
         .catch(function(err) {
           if (err.status !== 404) {
@@ -48,5 +51,17 @@ angular.module('inboxServices').factory('TranslationLoader',
           return {};
         });
     };
+
+    const re = new RegExp(`^${DOC_ID_PREFIX}([a-zA-Z]+)$`);
+    service.test = docId => docId && re.test(docId);
+    service.getCode = docId => {
+      if (!docId) {
+        return false;
+      }
+      const match = docId.toString().match(re);
+      return match && match[1];
+    };
+
+    return service;
   }
 );

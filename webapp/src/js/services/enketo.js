@@ -7,9 +7,12 @@ var uuid = require('uuid/v4'),
 angular.module('inboxServices').service('Enketo',
   function(
     $log,
+    $ngRedux,
     $q,
+    $timeout,
     $translate,
     $window,
+    Actions,
     AddAttachment,
     ContactSummary,
     DB,
@@ -17,13 +20,15 @@ angular.module('inboxServices').service('Enketo',
     EnketoTranslation,
     ExtractLineage,
     FileReader,
+    GetReportContent,
     Language,
     LineageModelGenerator,
     Search,
+    SubmitFormBySms,
     TranslateFrom,
     UserContact,
-    XmlForm,
     XSLT,
+    XmlForm,
     ZScore
   ) {
     'use strict';
@@ -32,12 +37,20 @@ angular.module('inboxServices').service('Enketo',
     var objUrls = [];
     var xmlCache = {};
     var FORM_ATTACHMENT_NAME = 'xml';
-    var REPORT_ATTACHMENT_NAME = this.REPORT_ATTACHMENT_NAME = 'content';
 
     var currentForm;
     this.getCurrentForm = function() {
       return currentForm;
     };
+
+    const self = this;
+    const mapDispatchToTarget = (dispatch) => {
+      const actions = Actions(dispatch);
+      return {
+        setLastChangedDoc: actions.setLastChangedDoc
+      };
+    };
+    $ngRedux.connect(null, mapDispatchToTarget)(self);
 
     var init = function() {
       ZScore()
@@ -169,7 +182,7 @@ angular.module('inboxServices').service('Enketo',
             // Delay focussing on the next field, so that keybaord close and
             // open events both register.  This should mean that the on-screen
             // keyboard is maintained between fields.
-            setTimeout(function() {
+            $timeout(function() {
               $nextQuestion.first().trigger('focus');
             }, 10);
           }
@@ -278,7 +291,7 @@ angular.module('inboxServices').service('Enketo',
         wrapper.find('input').on('keydown', handleKeypressOnInputField);
 
         // handle page turning using browser history
-        window.history.replaceState({ enketo_page_number: 0 }, '');
+        $window.history.replaceState({ enketo_page_number: 0 }, '');
         overrideNavigationButtons(currentForm, wrapper);
         addPopStateHandler(currentForm, wrapper);
         forceRecalculate(currentForm);
@@ -294,7 +307,7 @@ angular.module('inboxServices').service('Enketo',
           form.pages.next()
             .then(function(newPageIndex) {
               if(typeof newPageIndex === 'number') {
-                window.history.pushState({ enketo_page_number: newPageIndex }, '');
+                $window.history.pushState({ enketo_page_number: newPageIndex }, '');
               }
               forceRecalculate(form);
             });
@@ -304,14 +317,14 @@ angular.module('inboxServices').service('Enketo',
       $wrapper.find('.btn.previous-page')
         .off('.pagemode')
         .on('click.pagemode', function() {
-          window.history.back();
+          $window.history.back();
           forceRecalculate(form);
           return false;
         });
     };
 
     var addPopStateHandler = function(form, $wrapper) {
-      $(window).on('popstate.enketo-pagemode', function(event) {
+      $($window).on('popstate.enketo-pagemode', function(event) {
         if(event.originalEvent &&
             event.originalEvent.state &&
             typeof event.originalEvent.state.enketo_page_number === 'number') {
@@ -426,7 +439,7 @@ angular.module('inboxServices').service('Enketo',
 
       record = getOuterHTML($record[0]);
 
-      AddAttachment(doc, REPORT_ATTACHMENT_NAME, record, 'application/xml');
+      AddAttachment(doc, GetReportContent.REPORT_ATTACHMENT_NAME, record, 'application/xml');
       doc._id = getId('/*');
       doc.hidden_fields = EnketoTranslation.getHiddenFieldList(record);
 
@@ -434,7 +447,7 @@ angular.module('inboxServices').service('Enketo',
         xpath = xpath || xpathPath(elem);
         // replace instance root element node name with form internal ID
         var filename = 'user-file' +
-                       (xpath.startsWith('/' + doc.form) ? xpath : xpath.replace(/^\/[^\/]+/, '/' + doc.form));
+                       (xpath.startsWith('/' + doc.form) ? xpath : xpath.replace(/^\/[^/]+/, '/' + doc.form));
         AddAttachment(doc, filename, file, type, alreadyEncoded);
       };
 
@@ -552,13 +565,19 @@ angular.module('inboxServices').service('Enketo',
               doc.geolocation = geolocation;
             });
           }
+          self.setLastChangedDoc(docs[0]);
           return docs;
         })
-        .then(saveDocs);
+        .then(saveDocs)
+        .then(function(docs) {
+          // submit by sms _after_ saveDocs so that the main doc's ID is available
+          SubmitFormBySms(docs[0]);
+          return docs;
+        });
     };
 
     this.unload = function(form) {
-      $(window).off('.enketo-pagemode');
+      $($window).off('.enketo-pagemode');
       if (form) {
         form.resetView();
       }

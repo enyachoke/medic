@@ -1,10 +1,10 @@
 # medic-api
 
-Node server to support medic-webapp.
+Node server to support the medic app.
 
 # Table of contents
 
-<!-- To update table of contents run: `yarn toc` -->
+<!-- To update table of contents run: `npm toc` -->
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -56,20 +56,20 @@ Node server to support medic-webapp.
 
 ## Install
 
-Get node deps with `yarn install`.
+Get node deps with `npm ci`.
 
 ## Settings
 
 Export a `COUCH_URL` env variable so sentinel knows what database to use. e.g.
 
 ```
-export COUCH_URL='http://admin:pass@localhost:5984/medic'
+export COUCH_URL='http://myAdminUser:myAdminPass@localhost:5984/medic'
 ```
 
 If you are using CouchDB2.0 you need to also provide your node name. e.g.
 
 ```
-export COUCH_NODE_NAME=couchdb@localhost node server.js
+export COUCH_NODE_NAME=couchdb@127.0.0.1 node server.js
 ```
 
 If you want to allow cross-origin requests, add the flag `--allow-cors` when starting api. E.g.
@@ -130,10 +130,13 @@ See [`migrations.js`](https://github.com/medic/medic-api/blob/master/migrations.
 Importantly, the record of which migrations have been run is stored in the `migrations` array of an arbitrarily named document in CouchDB with the `.type` of `meta`. Because of this it can be a hard document to find, but you can get it using `curl`, and pretty print it with `jq`:
 
 ```
-curl 'http://admin:pass@localhost:5984/medic/_design/medic-client/_view/doc_by_type?key=\["meta"\]&include_docs=true' | jq .rows[].doc
+curl 'http://myAdminUser:myAdminPass@localhost:5984/medic/_design/medic-client/_view/doc_by_type?key=\["meta"\]&include_docs=true' | jq .rows[].doc
 ```
 
 So, if you want to re-run a migration, delete its entry in the `migrations` list and re-run api.
+
+## Troubleshooting
+Given the error `StatusCodeError: 404 - {"error":"not_found","reason":"no such node: couchdb@localhost"}` or alike - check that the value of your COUCH_NODE_NAME environment variable equals the result of `curl -X GET "http://localhost:5984/_membership" --user user:pwd`.`
 
 # API Overview
 
@@ -179,6 +182,24 @@ Returns the settings in JSON format.
 # Export
 
 Request different types of data in various formats.
+
+Each of the export endpoints except contacts and feedback supports a parameter which returns date formatted in human readable form (ISO 8601). Setting this parameter to false or leaving it out will return dates formatted as an epoch timestamp.
+
+To set this parameter for a GET request use:
+
+```
+http://admin:pass@localhost:5988/api/v2/export/messages?options[humanReadable]=true
+```
+
+To set this parameter for a POST request submit this as the request body:
+
+```json
+{
+  "options": {
+    "humanReadable": true
+  }
+}
+```
 
 ## GET /api/v2/export/reports
 
@@ -370,7 +391,7 @@ GET /api/v1/forms/NPYY.json
 
 ## POST /api/v2/records
 
-Create a new record based on a form. This requires a form definition exists on the server side matching the form code.
+Create a new record based on a [JSON form](https://github.com/medic/medic-docs/blob/master/configuration/forms.md#json-forms) that has been configured.
 
 Records can be created one of two ways, parsing the form data yourself and submitting a JSON object or by submitting the raw message string.
 
@@ -401,7 +422,7 @@ All property names will be lowercased.
 | Key                  | Description                                                                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------- |
 | \_meta.form          | The form code.                                                                                     |
-| \_meta.from          | Reporting phone number.                                                                            |
+| \_meta.from          | Reporting phone number. Optional.                                                                  |
 | \_meta.reported_date | Timestamp in MS since Unix Epoch of when the message was received on the gateway. Defaults to now. |
 | \_meta.locale        | Optional locale string. Example: 'fr'                                                              |
 

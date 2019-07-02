@@ -27,6 +27,12 @@ const medicLogo = element(by.className('logo-full')),
 
 module.exports = {
   calm: () => {
+<<<<<<< HEAD
+=======
+    const bootstrapperSelector = by.css('.bootstrap-layer');
+    helper.waitElementToPresent(element(bootstrapperSelector));
+    helper.waitElementToDisappear(bootstrapperSelector);
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     helper.waitUntilReady(medicLogo);
   },
 
@@ -110,6 +116,11 @@ module.exports = {
     helper.waitElementToBeVisible(element(by.id('reports-list')));
     if (refresh) {
       browser.refresh();
+    } else {
+      // A trick to trigger a list refresh.
+      // When already on the "reports" page, clicking on the menu item to "go to reports" doesn't, in fact, do anything.
+      element(by.css('.reset-filter')).click();
+      helper.waitForAngularComplete();
     }
   },
 

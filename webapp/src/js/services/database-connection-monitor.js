@@ -5,7 +5,14 @@ This service detects the event and resolves a promise when it occurs.
 DOMException: Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing
 */
 angular.module('inboxServices').factory('DatabaseConnectionMonitor',
+<<<<<<< HEAD
   function($window, $rootScope) {
+=======
+  function(
+    $rootScope,
+    $window
+  ) {
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     'use strict';
     'ngInject';
 

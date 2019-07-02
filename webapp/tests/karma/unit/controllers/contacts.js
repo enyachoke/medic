@@ -32,11 +32,25 @@ describe('Contacts controller', () => {
     deadListContains,
     deadList,
     contactSummary,
+<<<<<<< HEAD
     isDbAdmin;
 
   beforeEach(module('inboxApp'));
+=======
+    isDbAdmin,
+    liveListInit,
+    liveListReset,
+    actions,
+    getSelected,
+    tasksForContact;
 
-  beforeEach(inject((_$rootScope_, $controller) => {
+  beforeEach(() => {
+    module('inboxApp');
+    KarmaUtils.setupMockStore();
+  });
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
+
+  beforeEach(inject((_$rootScope_, $controller, $ngRedux, Actions, Selectors) => {
     deadListFind = sinon.stub();
     deadListContains = sinon.stub();
     deadList = () => {
@@ -50,6 +64,7 @@ describe('Contacts controller', () => {
         refresh: sinon.stub(),
         count: () => elements.length,
         insert: e => elements.push(e),
+        invalidateCache: () => {},
         set: es => (elements = es),
         update: e => {
           if (e !== district || elements[0] !== district) {
@@ -63,7 +78,7 @@ describe('Contacts controller', () => {
           return false;
         },
         contains: deadListContains,
-        containsDeleteStub: sinon.stub(),
+        setScope: sinon.stub()
       };
     };
 
@@ -77,7 +92,10 @@ describe('Contacts controller', () => {
     scope = $rootScope.$new();
     scope.setTitle = sinon.stub();
     scope.clearSelection = sinon.stub();
+<<<<<<< HEAD
     scope.clearCancelTarget = sinon.stub();
+=======
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     scope.setRightActionBar = sinon.stub();
     scope.setLeftActionBar = sinon.stub();
     contactSchema = {
@@ -129,6 +147,22 @@ describe('Contacts controller', () => {
     settings = sinon.stub().resolves({});
     auth = sinon.stub().rejects();
     isDbAdmin = sinon.stub();
+<<<<<<< HEAD
+=======
+    liveListInit = sinon.stub();
+    liveListReset = sinon.stub();
+
+    actions = Actions($ngRedux.dispatch);
+    const stubbedActions = {
+      loadSelectedChildren: sinon.stub().returns(Promise.resolve()),
+      loadSelectedReports: sinon.stub().returns(Promise.resolve())
+    };
+    getSelected = () => {
+      return Selectors.getSelected($ngRedux.getState());
+    };
+
+    tasksForContact = sinon.stub();
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
 
     createController = () => {
       searchService = sinon.stub();
@@ -136,12 +170,13 @@ describe('Contacts controller', () => {
 
       return $controller('ContactsCtrl', {
         $element: sinon.stub(),
-        $log: { error: sinon.stub() },
+        $log: { error: sinon.stub(), debug: sinon.stub() },
         $q: Q,
         $scope: scope,
         $state: { includes: sinon.stub(), go: sinon.stub() },
         $timeout: work => work(),
         $translate: $translate,
+        Actions: () => Object.assign({}, actions, stubbedActions),
         Auth: auth,
         Changes: changes,
         ContactSchema: contactSchema,
@@ -151,6 +186,8 @@ describe('Contacts controller', () => {
         LiveList: {
           contacts: contactsLiveList,
           'contact-search': contactSearchLiveList,
+          $init: liveListInit,
+          $reset: liveListReset
         },
         Search: searchService,
         SearchFilters: { freetext: sinon.stub(), reset: sinon.stub() },
@@ -162,6 +199,7 @@ describe('Contacts controller', () => {
         },
         Settings: settings,
         Simprints: { enabled: () => false },
+        TasksForContact: tasksForContact,
         Tour: () => {},
         TranslateFrom: key => `TranslateFrom:${key}`,
         UserSettings: userSettings,
@@ -182,6 +220,8 @@ describe('Contacts controller', () => {
           scope.setTitle.getCall(0).args[0],
           typeLabel + 'translated'
         );
+        assert(liveListInit.called);
+        assert.deepEqual(liveListInit.args[0], [scope, 'contacts', 'contact-search']);
       });
   });
 
@@ -196,7 +236,7 @@ describe('Contacts controller', () => {
 
     it('set selected contact', () => {
       return testContactSelection({ doc: district }).then(() => {
-        assert.deepEqual(scope.selected.doc, district);
+        assert.checkDeepProperties(getSelected().doc, district);
         assert(scope.setRightActionBar.called);
         assert(scope.setRightActionBar.args[0][0].selected);
       });
@@ -209,10 +249,58 @@ describe('Contacts controller', () => {
           throw new Error('Expected error to be thrown');
         })
         .catch(() => {
-          assert.deepEqual(scope.selected, { doc: district, error: true });
-          assert(scope.setRightActionBar.called);
-          assert.deepEqual(scope.setRightActionBar.args[0], []);
+          assert.checkDeepProperties(getSelected(), { doc: district, error: true });
+          assert.equal(scope.setRightActionBar.callCount, 2);
+          assert.deepEqual(scope.setRightActionBar.args[1], []);
         });
+    });
+
+    it('should not get tasks when not allowed', () => {
+      auth.withArgs('can_view_tasks').rejects();
+      return testContactSelection({ doc: district }).then(() => {
+        assert.checkDeepProperties(getSelected().doc, district);
+        assert(scope.setRightActionBar.called);
+        assert(scope.setRightActionBar.args[0][0].selected);
+        assert(auth.withArgs('can_view_tasks').called);
+        assert(!tasksForContact.called);
+      });
+    });
+
+    it('should get tasks when allowed', () => {
+      auth.withArgs('can_view_tasks').resolves();
+      return testContactSelection({ doc: district }).then(() => {
+        assert.checkDeepProperties(getSelected().doc, district);
+        assert(scope.setRightActionBar.called);
+        assert(scope.setRightActionBar.args[0][0].selected);
+        assert(auth.withArgs('can_view_tasks').called);
+        assert.equal(tasksForContact.callCount, 1);
+        assert.deepEqual(tasksForContact.args[0][0].doc, getSelected().doc);
+        assert.equal(tasksForContact.args[0][1], 'ContactsCtrl');
+      });
+    });
+
+    it('should store tasks in redux store and count tasks by contact', () => {
+      auth.withArgs('can_view_tasks').resolves();
+      let receiveTasksCallback;
+      tasksForContact.callsFake((selected, listenerName, callback) => {
+        receiveTasksCallback = callback;
+      });
+      const tasks = [
+        { doc: { contact: { _id: 'contact1' } } },
+        { other: 4  },
+        { doc: { other: 3 } },
+        { doc: { contact: { _id: 'contact1' } } },
+        { doc: { contact: { _id: 'contact2' } } },
+        { doc: { contact: { _id: 'contact1' } } },
+      ];
+
+      return testContactSelection({ doc: district }).then(() => {
+        assert(auth.withArgs('can_view_tasks').called);
+        assert.equal(tasksForContact.callCount, 1);
+        receiveTasksCallback(tasks);
+        assert.deepEqual(getSelected().tasks, tasks);
+        assert.deepEqual(getSelected().tasksByContact, { 'contact1': 3, 'contact2': 1 });
+      });
     });
   });
 
@@ -228,14 +316,14 @@ describe('Contacts controller', () => {
             scope.setRightActionBar.called,
             'right actionBar should be set'
           );
-          const actionBarArgs = scope.setRightActionBar.getCall(0).args[0];
+          const actionBarArgs = scope.setRightActionBar.getCall(1).args[0];
           assertions(actionBarArgs);
         });
     };
 
     it('with the selected doc', () => {
       return testRightActionBar({ doc: district }, actionBarArgs => {
-        assert.deepEqual(actionBarArgs.selected[0], district);
+        assert.checkDeepProperties(actionBarArgs.selected[0], district);
       });
     });
 
@@ -264,7 +352,7 @@ describe('Contacts controller', () => {
 
     it('for the Message and Call buttons', () => {
       return testRightActionBar({ doc: person }, actionBarArgs => {
-        assert.deepEqual(actionBarArgs.sendTo, person);
+        assert.checkDeepProperties(actionBarArgs.sendTo, person);
       });
     });
 
@@ -285,7 +373,7 @@ describe('Contacts controller', () => {
       xmlForms.callsArgWith(2, { error: 'no forms brew' }); // call the callback
       return testRightActionBar({ doc: person }, actionBarArgs => {
         assert.equal(actionBarArgs.relevantForms, undefined);
-        assert.deepEqual(actionBarArgs.sendTo, person);
+        assert.checkDeepProperties(actionBarArgs.sendTo, person);
         assert.equal(actionBarArgs.selected[0]._id, person._id);
         assert.equal(actionBarArgs.selected[0].child.type, childType);
         assert.equal(actionBarArgs.selected[0].child.icon, icon);
@@ -341,14 +429,14 @@ describe('Contacts controller', () => {
         return createController()
           .getSetupPromiseForTesting()
           .then(() => {
-            return scope.setSelected({ doc: district });
+            return scope.setSelected({ doc: district, reportLoader: Promise.resolve() });
           })
           .then(() => {
             assert(
               scope.setRightActionBar.called,
               'right actionBar should be set'
             );
-            const actionBarArgs = scope.setRightActionBar.getCall(0).args[0];
+            const actionBarArgs = scope.setRightActionBar.getCall(1).args[0];
             assert.deepEqual(actionBarArgs.relevantForms.length, 1);
             assert.equal(actionBarArgs.relevantForms[0].title, expectedTitle);
           });
@@ -396,14 +484,14 @@ describe('Contacts controller', () => {
         return createController()
           .getSetupPromiseForTesting()
           .then(() => {
-            return scope.setSelected({ doc: { _id: 'my-contact', muted: false } });
+            return scope.setSelected({ doc: { _id: 'my-contact', muted: false }, reportLoader: Promise.resolve() });
           })
           .then(() => {
             assert(
               scope.setRightActionBar.called,
               'right actionBar should be set'
             );
-            assert.deepEqual(scope.setRightActionBar.args[0][0].relevantForms, [
+            assert.deepEqual(scope.setRightActionBar.args[1][0].relevantForms, [
               { code: 'unmute', icon: 'icon', title: 'form.unmutetranslated', showUnmuteModal: false},
               { code: 'mute', icon: 'icon', title: 'form.mutetranslated', showUnmuteModal: false},
               { code: 'visit', icon: 'icon', title: 'form.visittranslated', showUnmuteModal: false}
@@ -427,14 +515,14 @@ describe('Contacts controller', () => {
         return createController()
           .getSetupPromiseForTesting()
           .then(() => {
-            return scope.setSelected({ doc: { _id: 'my-contact', muted: true }});
+            return scope.setSelected({ doc: { _id: 'my-contact', muted: true }, reportLoader: Promise.resolve() });
           })
           .then(() => {
             assert(
               scope.setRightActionBar.called,
               'right actionBar should be set'
             );
-            assert.deepEqual(scope.setRightActionBar.args[0][0].relevantForms, [
+            assert.deepEqual(scope.setRightActionBar.args[1][0].relevantForms, [
               { code: 'unmute', icon: 'icon', title: 'form.unmutetranslated', showUnmuteModal: false},
               { code: 'mute', icon: 'icon', title: 'form.mutetranslated', showUnmuteModal: true},
               { code: 'visit', icon: 'icon', title: 'form.visittranslated', showUnmuteModal: true}
@@ -565,8 +653,12 @@ describe('Contacts controller', () => {
           const lhs = contactsLiveList.getList();
           assert.equal(lhs.length, 50);
           scrollLoaderCallback();
-          assert.equal(searchService.args[1][2].skip, 50);
-          assert.equal(searchService.args[1][2].limit, 50);
+          assert.deepEqual(searchService.args[1][2], {
+            reuseExistingDom: true,
+            paginating: true,
+            limit: 50,
+            skip: 50,
+          });
         });
     });
 
@@ -580,8 +672,12 @@ describe('Contacts controller', () => {
           const lhs = contactsLiveList.getList();
           assert.equal(lhs.length, 51);
           scrollLoaderCallback();
-          assert.equal(searchService.args[1][2].skip, 50);
-          assert.equal(searchService.args[1][2].limit, 50);
+          assert.deepEqual(searchService.args[1][2], {
+            reuseExistingDom: true,
+            paginating: true,
+            limit: 50,
+            skip: 50,
+          });
         });
     });
 
@@ -599,8 +695,11 @@ describe('Contacts controller', () => {
           const lhs = contactsLiveList.getList();
           changesCallback({});
           assert.equal(lhs.length, 10);
-          assert.equal(searchService.args[1][2].limit, 10);
-          assert.equal(searchService.args[1][2].skip, undefined);
+          assert.deepInclude(searchService.args[1][2], {
+            limit: 10,
+            silent: true,
+            withIds: false,
+          });
         });
     });
 
@@ -633,8 +732,7 @@ describe('Contacts controller', () => {
           searchResults = Array(50).fill(searchResult);
           searchService.returns(Promise.resolve(searchResults));
           scope.search();
-          assert.equal(searchService.args[1][2].limit, 50);
-          assert.equal(searchService.args[1][2].skip, undefined);
+          assert.deepEqual(searchService.args[1][2], { limit: 50 });
           return Promise.resolve();
         })
         .then(() => {
@@ -642,8 +740,12 @@ describe('Contacts controller', () => {
           assert.equal(lhs.length, 50);
           //aand paginate the search results, also not skipping the extra place
           scrollLoaderCallback();
-          assert.equal(searchService.args[2][2].skip, 50);
-          assert.equal(searchService.args[2][2].limit, 50);
+          assert.deepEqual(searchService.args[2][2], {
+            limit: 50,
+            paginating: true,
+            reuseExistingDom: true,
+            skip: 50,
+          });
         });
     });
 
@@ -658,36 +760,54 @@ describe('Contacts controller', () => {
           const lhs = contactsLiveList.getList();
           assert.equal(lhs.length, 50);
           scrollLoaderCallback();
-          assert.equal(searchService.args[1][2].skip, 50);
-          assert.equal(searchService.args[1][2].limit, 50);
+          assert.deepEqual(searchService.args[1][2], {
+            limit: 50,
+            paginating: true,
+            reuseExistingDom: true,
+            skip: 50,
+          });
         });
     });
 
     it('when paginating, does not modify the skip when it finds homeplace on subsequent pages #4085', () => {
-      const searchResult = { _id: 'search-result' };
-      searchResults = Array(50).fill(searchResult);
+      const mockResults = (count, startAt = 0) => {
+        const result = [];
+        for (let i = startAt; i < startAt + count; i++) {
+          result.push({ _id: `search-result${i}` });
+        }
+        return result;
+      };
+      searchResults = mockResults(50);
 
       return createController()
         .getSetupPromiseForTesting({ scrollLoaderStub })
         .then(() => {
           const lhs = contactsLiveList.getList();
           assert.equal(lhs.length, 51);
-          searchResults = Array(49).fill(searchResult);
+          searchResults = mockResults(49, 50);
           searchResults.push(district);
           searchService.returns(Promise.resolve(searchResults));
           scrollLoaderCallback();
-          assert.equal(searchService.args[1][2].skip, 50);
-          assert.equal(searchService.args[1][2].limit, 50);
+          assert.deepEqual(searchService.args[1][2], {
+            limit: 50,
+            paginating: true,
+            reuseExistingDom: true,
+            skip: 50,
+          });
           return Promise.resolve();
         })
         .then(() => {
           const lhs = contactsLiveList.getList();
           assert.equal(lhs.length, 100);
-          searchResults = Array(50).fill(searchResult);
+          searchResults = mockResults(50, 100);
           searchService.returns(Promise.resolve(searchResults));
           scrollLoaderCallback();
-          assert.equal(searchService.args[2][2].skip, 100);
-          assert.equal(searchService.args[2][2].limit, 50);
+          assert.deepEqual(searchService.args[2][2], {
+            limit: 50,
+            paginating: true,
+            reuseExistingDom: true,
+            skip: 100,
+          });
           return Promise.resolve();
         })
         .then(() => {
@@ -709,7 +829,6 @@ describe('Contacts controller', () => {
             changesFilter({ doc: { type: 'district_hospital' } }),
             true
           );
-          assert.equal(contactsLiveList.containsDeleteStub.callCount, 0);
         });
     });
 
@@ -720,7 +839,6 @@ describe('Contacts controller', () => {
           assert.isNotOk(changesFilter({ doc: {} }));
           assert.isNotOk(changesFilter({ doc: { type: 'data_record' } }));
           assert.isNotOk(changesFilter({ doc: { type: '' } }));
-          assert.equal(contactsLiveList.containsDeleteStub.callCount, 3);
         });
     });
 
@@ -761,14 +879,19 @@ describe('Contacts controller', () => {
         });
     });
 
-    it('filtering returns true for contained tombstones', () => {
-      contactsLiveList.containsDeleteStub.returns(true);
+    it('filtering returns true for contained deletions', () => {
+      isAdmin = false;
+      deadListContains.returns(true);
       return createController()
         .getSetupPromiseForTesting()
         .then(() => {
-          assert.equal(changesFilter({ doc: {} }), true);
+          assert.equal(changesFilter({ deleted: true, id: 'some_id' }), true);
+          assert.equal(deadListContains.callCount, 1);
+          assert.deepEqual(deadListContains.args[0], ['some_id']);
         });
     });
+
+    // test for empty doc!
   });
 
   describe('last visited date', function() {
@@ -969,7 +1092,7 @@ describe('Contacts controller', () => {
       const deletedReport = {
         type: 'data_record',
         form: 'home_visit',
-        fields: { visited_contact_uuid: 'deleted' },
+        fields: { visited_contact_uuid: 'something' },
         _deleted: true,
       };
       const irrelevantReports = [
@@ -985,23 +1108,27 @@ describe('Contacts controller', () => {
           form: 'home_visit',
           fields: { visited_contact_uuid: 'something' },
         },
+        {
+          type: 'data_record',
+          form: 'home_visit',
+          fields: { visited_contact_uuid: 'irrelevant' },
+          _deleted: true
+        }
       ];
 
       deadListContains.returns(false);
-      deadListContains.withArgs({ _id: 'something' }).returns(true);
+      deadListContains.withArgs('something').returns(true);
 
       return createController()
         .getSetupPromiseForTesting()
         .then(() => {
-          assert.equal(!!changesFilter({ doc: relevantReport }), true);
-          assert.equal(!!changesFilter({ doc: irrelevantReports[0] }), false);
-          assert.equal(!!changesFilter({ doc: irrelevantReports[1] }), false);
-          assert.equal(!!changesFilter({ doc: irrelevantReports[2] }), false);
-          assert.equal(!!changesFilter({ doc: irrelevantReports[3] }), false);
-          assert.equal(
-            !!changesFilter({ doc: deletedReport, deleted: true }),
-            false
-          );
+          assert.equal(!!changesFilter({ doc: relevantReport, id: 'relevantReport' }), true);
+          assert.equal(!!changesFilter({ doc: irrelevantReports[0], id: 'irrelevant1' }), false);
+          assert.equal(!!changesFilter({ doc: irrelevantReports[1], id: 'irrelevant2' }), false);
+          assert.equal(!!changesFilter({ doc: irrelevantReports[2], id: 'irrelevant3' }), false);
+          assert.equal(!!changesFilter({ doc: irrelevantReports[3], id: 'irrelevant4' }), false);
+          assert.equal(!!changesFilter({ doc: irrelevantReports[4], id: 'irrelevant5' }), false);
+          assert.equal(!!changesFilter({ doc: deletedReport, deleted: true }), true);
         });
     });
 
@@ -1048,7 +1175,7 @@ describe('Contacts controller', () => {
       ];
 
       deadListContains.returns(false);
-      deadListContains.withArgs({ _id: 'something' }).returns(true);
+      deadListContains.withArgs('something').returns(true);
 
       return createController()
         .getSetupPromiseForTesting()
@@ -1090,7 +1217,7 @@ describe('Contacts controller', () => {
       describe('uhc visits enabled', () => {
         beforeEach(() => {
           auth.resolves();
-          deadListContains.withArgs({ _id: 4 }).returns(true);
+          deadListContains.withArgs(4).returns(true);
         });
         describe('alpha default sorting', () => {
           it('does not require refreshing when sorting is `alpha` and visit report is received', () => {
@@ -1114,7 +1241,7 @@ describe('Contacts controller', () => {
                     assert.deepEqual(searchService.args[i], [
                       'contacts',
                       { types: { selected: ['childType'] } },
-                      { limit: 5, withIds: false, silent: true },
+                      { limit: 5, withIds: false, silent: true, reuseExistingDom: true },
                       { displayLastVisitedDate: true, visitCountSettings: {} },
                       undefined,
                     ]);
@@ -1144,7 +1271,7 @@ describe('Contacts controller', () => {
                   assert.deepEqual(searchService.args[1], [
                     'contacts',
                     { types: { selected: ['childType'] } },
-                    { limit: 5, withIds: true, silent: true },
+                    { limit: 5, withIds: true, silent: true, reuseExistingDom: true },
                     {
                       displayLastVisitedDate: true,
                       visitCountSettings: {},
@@ -1157,7 +1284,7 @@ describe('Contacts controller', () => {
                     assert.deepEqual(searchService.args[i], [
                       'contacts',
                       { types: { selected: ['childType'] } },
-                      { limit: 5, withIds: false, silent: true },
+                      { limit: 5, withIds: false, silent: true, reuseExistingDom: true },
                       {
                         displayLastVisitedDate: true,
                         visitCountSettings: {},
@@ -1200,7 +1327,7 @@ describe('Contacts controller', () => {
                     assert.deepEqual(searchService.args[i], [
                       'contacts',
                       { types: { selected: ['childType'] } },
-                      { limit: 5, withIds: false, silent: true },
+                      { limit: 5, withIds: false, silent: true, reuseExistingDom: true },
                       { displayLastVisitedDate: true, visitCountSettings: {} },
                       undefined,
                     ]);
@@ -1229,7 +1356,7 @@ describe('Contacts controller', () => {
                   assert.deepEqual(searchService.args[1], [
                     'contacts',
                     { types: { selected: ['childType'] } },
-                    { limit: 5, withIds: true, silent: true },
+                    { limit: 5, withIds: true, silent: true, reuseExistingDom: true },
                     {
                       displayLastVisitedDate: true,
                       visitCountSettings: {},
@@ -1242,7 +1369,7 @@ describe('Contacts controller', () => {
                     assert.deepEqual(searchService.args[i], [
                       'contacts',
                       { types: { selected: ['childType'] } },
-                      { limit: 5, withIds: false, silent: true },
+                      { limit: 5, withIds: false, silent: true, reuseExistingDom: true },
                       {
                         displayLastVisitedDate: true,
                         visitCountSettings: {},
@@ -1260,7 +1387,7 @@ describe('Contacts controller', () => {
       describe('uhc visits disabled', () => {
         beforeEach(() => {
           auth.rejects();
-          deadListContains.withArgs({ _id: 4 }).returns(true);
+          deadListContains.withArgs(4).returns(true);
         });
 
         describe('alpha default sorting', () => {
@@ -1285,7 +1412,7 @@ describe('Contacts controller', () => {
                     assert.deepEqual(searchService.args[i], [
                       'contacts',
                       { types: { selected: ['childType'] } },
-                      { limit: 5, withIds: false, silent: true },
+                      { limit: 5, withIds: false, silent: true, reuseExistingDom: true },
                       {},
                       undefined,
                     ]);
@@ -1324,7 +1451,7 @@ describe('Contacts controller', () => {
                     assert.deepEqual(searchService.args[2], [
                       'contacts',
                       { types: { selected: ['childType'] } },
-                      { limit: 5, withIds: false, silent: true },
+                      { limit: 5, withIds: false, silent: true, reuseExistingDom: true },
                       {},
                       undefined,
                     ]);
@@ -1355,6 +1482,18 @@ describe('Contacts controller', () => {
             });
         });
       });
+<<<<<<< HEAD
+=======
+    });
+  });
+
+  describe('destroy', () => {
+    it('should reset liveList when destroyed', () => {
+      createController();
+      scope.$destroy();
+      assert.equal(liveListReset.callCount, 1);
+      assert.deepEqual(liveListReset.args[0], ['contacts', 'contact-search']);
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     });
   });
 });

@@ -1,12 +1,12 @@
 require('chai').should();
 
-const sinon = require('sinon'),
-      auth = require('../../../src/auth'),
-      serverUtils = require('../../../src/server-utils');
+const sinon = require('sinon');
+const auth = require('../../../src/auth');
+const serverUtils = require('../../../src/server-utils');
+const db = require('../../../src/db');
 
-const controller = require('../../../src/controllers/export-data'),
-      exportDataV1 = require('../../../src/services/export-data'),
-      exportDataV2 = require('../../../src/services/export-data-2');
+const controller = require('../../../src/controllers/export-data');
+const service = require('../../../src/services/export-data');
 
 let set;
 
@@ -16,27 +16,26 @@ describe('Export Data controller', () => {
     sinon.stub(auth, 'check');
     sinon.stub(auth, 'getUserCtx');
     sinon.stub(auth, 'isOnlineOnly');
-    sinon.stub(exportDataV1, 'get');
-    sinon.stub(exportDataV2, 'export');
-
-    set = sinon.stub().returns({ set });
+    set = sinon.stub().returns({ set: sinon.stub() });
   });
 
   afterEach(() => sinon.restore());
 
-  describe('V2', () => {
+  describe('get', () => {
+
     it('Throws an error if you try to query for an unsupported export', () => {
-      controller.routeV2({req: true, params: {type: 'fake'}}, {res: true});
+      controller.get({req: true, params: {type: 'fake'}}, {res: true});
       serverUtils.error.callCount.should.equal(1);
-      serverUtils.error.args[0][0].message.should.contain('v2 export only supports');
+      serverUtils.error.args[0][0].message.should.equal('Invalid export type "fake"');
       serverUtils.error.args[0][1].req.should.equal(true);
       serverUtils.error.args[0][2].res.should.equal(true);
     });
+
     it('Checks permissions', () => {
       auth.check.returns(Promise.reject({message: 'Bad permissions'}));
       auth.getUserCtx.returns(Promise.resolve({}));
       auth.isOnlineOnly.returns(true);
-      return controller.routeV2({req: true, params: {type: 'reports'}}, {res: true})
+      return controller.get({req: true, params: {type: 'reports'}}, {res: true})
         .then(() => {
           auth.check.callCount.should.equal(1);
           serverUtils.error.callCount.should.equal(1);
@@ -46,7 +45,7 @@ describe('Export Data controller', () => {
         });
     });
 
-    it('corrects filter types', () => {
+    it('corrects filter & option types', () => {
       const req = {
         params: {
           type: 'reports'
@@ -59,24 +58,33 @@ describe('Export Data controller', () => {
           }
         }
       };
+      const res = {
+        set: set,
+        flushHeaders: sinon.stub(),
+        end: sinon.stub()
+      };
       auth.check.resolves();
       auth.getUserCtx.returns(Promise.resolve({}));
       auth.isOnlineOnly.returns(true);
-      return controller.routeV2(req, { set: set, flushHeaders: sinon.stub() }).then(() => {
-        exportDataV2.export.callCount.should.equal(1);
-        exportDataV2.export.args[0].should.deep.equal([
+      sinon.stub(service, 'export');
+
+      return controller.get(req, res).then(() => {
+        service.export.callCount.should.equal(1);
+        service.export.args[0].should.deep.equal([
           'reports',
           {
             date: { from: 1525813200000, to: 1528232399999 },
             valid: true,
             verified: false
           },
-          {}
+          {
+            humanReadable: false
+          }
         ]);
       });
     });
-  });
 
+<<<<<<< HEAD
   describe('V1', () => {
     it('Checks permissions', () => {
       auth.check.returns(Promise.reject({message: 'Bad permissions'}));
@@ -102,7 +110,40 @@ describe('Export Data controller', () => {
         exportDataV1.get.args[0][0].should.deep.equal(
           { districtId: 'abc', type: 'feedback', form: undefined, district: 'xyz' }
         );
+=======
+    // NB: This is actually an integration test so we can test that
+    // errors from the underlying mapper are handled correctly in
+    // the controller.
+    it('catches error from service.export', done => {
+      const req = {
+        params: {
+          type: 'feedback'
+        }
+      };
+      const res = {
+        set: set,
+        flushHeaders: sinon.stub(),
+        end: sinon.stub(),
+        write: sinon.stub(),
+        on: sinon.stub(),
+      };
+      auth.check.resolves();
+      auth.getUserCtx.returns(Promise.resolve({}));
+      auth.isOnlineOnly.returns(true);
+      sinon.stub(db.medicUsersMeta, 'allDocs').returns(Promise.reject(new Error('db not found')));
+      
+      controller.get(req, res).then(() => {
+        // defer execution to allow the stream to write first
+        setTimeout(() => {
+          res.write.callCount.should.equal(1);
+          res.write.args[0][0].toString().should.equal('id,reported_date,user,app_version,url,info\n');
+          res.end.callCount.should.equal(1);
+          res.end.args[0][0].should.equal('--ERROR--\nError exporting data: db not found\n');
+          done();
+        });
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       });
     });
   });
+
 });

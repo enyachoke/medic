@@ -1,13 +1,18 @@
 const auth = require('../auth'),
-      db = require('../db-pouch'),
+      db = require('../db'),
       authorization = require('../services/authorization'),
       _ = require('underscore'),
       heartbeatFilter = require('../services/heartbeat-filter'),
-      tombstoneUtils = require('@shared-libs/tombstone-utils'),
+      tombstoneUtils = require('@medic/tombstone-utils'),
       uuid = require('uuid/v4'),
       config = require('../config'),
       logger = require('../logger'),
+<<<<<<< HEAD
       serverChecks = require('@shared-libs/server-checks'),
+=======
+      serverChecks = require('@medic/server-checks'),
+      environment = require('../environment'),
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       semver = require('semver');
 
 let inited = false,
@@ -364,7 +369,11 @@ const initContinuousFeed = since => {
 
 const initServerChecks = () =>
   serverChecks
+<<<<<<< HEAD
   .getCouchDbVersion(db.serverUrl)
+=======
+  .getCouchDbVersion(environment.serverUrl)
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
   .then(shouldLimitChangesRequests);
 
 const shouldLimitChangesRequests = couchDbVersion => {

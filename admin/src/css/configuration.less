@@ -133,8 +133,14 @@ dl.horizontal {
       margin-right: 10px;
       vertical-align: middle;
     }
-    &.scheduled:before {
-      content: @scheduled-state-icon;
+    &.scheduled {
+      &:before {
+        content: @scheduled-state-icon;
+      }
+      &.has-error {
+        color: @error-color;
+        font-weight: bold;
+      }
     }
     &.muted:before {
       content: @muted-state-icon;
@@ -181,4 +187,9 @@ dl.horizontal {
       line-height: inherit;
     }
   }
+}
+
+.translations .missing-term {
+  font-style: italic;
+  color: @label-color;
 }

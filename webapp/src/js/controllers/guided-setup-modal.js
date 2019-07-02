@@ -1,4 +1,4 @@
-var phoneNumber = require('phone-number'),
+var phoneNumber = require('@medic/phone-number'),
     countries = require('../modules/countries');
 
 // TODO convert this controller to use angular more and jquery less
@@ -6,9 +6,8 @@ angular.module('inboxControllers').controller('GuidedSetupModalCtrl',
   function(
     $log,
     $scope,
-    $translate,
+    $timeout,
     $uibModalInstance,
-    DB,
     Languages,
     Settings,
     UpdateSettings
@@ -124,7 +123,7 @@ angular.module('inboxControllers').controller('GuidedSetupModalCtrl',
         Settings()
           .then(function(res) {
             if (res.setup_complete) {
-              setTimeout(function() {
+              $timeout(function() {
                 $('#guided-setup [name=default-country-code]').val(res.default_country_code).change();
                 $('#guided-setup [name=gateway-number]').val(res.gateway_number).trigger('input');
                 $('#primary-contact-content a[data-value=' + res.care_coordinator + ']').trigger('click');

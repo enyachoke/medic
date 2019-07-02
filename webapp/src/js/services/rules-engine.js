@@ -3,17 +3,15 @@ var nools = require('nools'),
     nootils = require('medic-nootils'),
     FIRST_RUN_COMPLETE_TYPE = '_complete',
     // number of weeks before reported date to assume for start of pregnancy
-    KNOWN_TYPES = [ FIRST_RUN_COMPLETE_TYPE, 'task', 'target' ];
+    KNOWN_TYPES = [ FIRST_RUN_COMPLETE_TYPE, 'task', 'target' ],
+    registrationUtils = require('@medic/registration-utils');
 
 (function () {
 
   'use strict';
 
-  var inboxServices = angular.module('inboxServices');
-
-  inboxServices.factory('RulesEngine',
+  angular.module('inboxServices').factory('RulesEngine',
     function(
-      $log,
       $q,
       Changes,
       ContactSchema,
@@ -51,19 +49,19 @@ var nools = require('nools'),
 
       var getContactId = function(doc) {
         // get the associated patient or place id to group reports by
+<<<<<<< HEAD
         return doc && (
           doc.patient_id ||
           doc.place_id ||
           (doc.fields && (doc.fields.patient_id || doc.fields.place_id || doc.fields.patient_uuid))
         );
+=======
+        return registrationUtils.getPatientId(doc);
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       };
 
       var contactHasId = function(contact, id) {
-        return contact && (
-          contact._id === id ||
-          contact.patient_id === id ||
-          contact.place_id === id
-        );
+        return registrationUtils.getSubjectIds(contact).includes(id);
       };
 
       var deriveFacts = function(dataRecords, contacts) {

@@ -1,6 +1,6 @@
 const bootstrapper = require('../../../src/js/bootstrapper'),
       sinon = require('sinon'),
-      assert = require('chai').assert,
+      { expect, assert } = require('chai'),
       pouchDbOptions = {
         local: { auto_compaction: true },
         remote: { skip_setup: true }
@@ -12,6 +12,10 @@ let originalDocument,
     localGet,
     localReplicate,
     localClose,
+<<<<<<< HEAD
+=======
+    registered,
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     remoteClose;
 
 describe('bootstrapper', () => {
@@ -34,6 +38,10 @@ describe('bootstrapper', () => {
       remote: true,
       close: remoteClose
     });
+<<<<<<< HEAD
+=======
+    registered = {};
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
 
     if (typeof document !== 'undefined') {
       originalDocument = document;
@@ -44,13 +52,23 @@ describe('bootstrapper', () => {
     document = { cookie: '' };
     window = {
       location: {
+        protocol: 'http:',
+        hostname: 'localhost',
+        port: '5988',
+        pathname: '/medic/_design/medic/_rewrite/#/messages',
         href: 'http://localhost:5988/medic/_design/medic/_rewrite/#/messages'
+      },
+      navigator: {
+        serviceWorker: {
+          register: () => Promise.resolve(registered),
+        },
       },
       PouchDB: pouchDb
     };
 
     $ = sinon.stub().returns({
       text: sinon.stub(),
+      click: sinon.stub(),
       html: sinon.stub()
     });
 
@@ -202,4 +220,20 @@ describe('bootstrapper', () => {
     });
   });
 
+  it('error results if service worker fails registration', done => {
+    setUserCtxCookie({ name: 'jim' });
+    pouchDb.onCall(0).returns({
+      get: sinon.stub().resolves(),
+      replicate: { from: sinon.stub() },
+      close: sinon.stub()
+    });
+
+    const failingRegister = sinon.stub().rejects('error');
+    window.navigator.serviceWorker.register = failingRegister;
+    bootstrapper(pouchDbOptions, err => {
+      expect(failingRegister.callCount).to.eq(1);
+      expect(err).to.include({ name: 'error' });
+      done();
+    });
+  });
 });

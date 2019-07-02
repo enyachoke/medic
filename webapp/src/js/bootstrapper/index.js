@@ -2,9 +2,11 @@
 
   'use strict';
 
-  var ONLINE_ROLE = 'mm-online';
+  const purger = require('./purger');
+  const registerServiceWorker = require('./swRegister');
+  const translator = require('./translator');
 
-  var translator = require('./translator');
+  const ONLINE_ROLE = 'mm-online';
 
   var purger = require('./purger');
 
@@ -31,16 +33,15 @@
     }
   };
 
-  var getDbInfo = function() {
+  const getDbInfo = function() {
     // parse the URL to determine the remote and local database names
-    var url = window.location.href;
-    var protocolLocation = url.indexOf('//') + 2;
-    var hostLocation = url.indexOf('/', protocolLocation) + 1;
-    var dbNameLocation = url.indexOf('/', hostLocation);
-    var dbName = url.slice(hostLocation, dbNameLocation);
+    const location = window.location;
+    const dbName = 'medic';
+    const port = location.port ? ':' + location.port : '';
+    const remoteDB = location.protocol + '//' + location.hostname + port + '/' + dbName;
     return {
       name: dbName,
-      remote: url.slice(0, dbNameLocation)
+      remote: remoteDB
     };
   };
 
@@ -117,7 +118,8 @@
   var setUiError = function() {
     var errorMessage = translator.translate('ERROR_MESSAGE');
     var tryAgain = translator.translate('TRY_AGAIN');
-    $('.bootstrap-layer').html('<div><p>' + errorMessage + '</p><a class="btn btn-primary" href="#" onclick="window.location.reload(false);">' + tryAgain + '</a></div>');
+    $('.bootstrap-layer').html('<div><p>' + errorMessage + '</p><a id="btn-reload" class="btn btn-primary" href="#">' + tryAgain + '</a></div>');
+    $('#btn-reload').click(() => window.location.reload(false));
   };
 
   var getDdoc = function(localDb) {
@@ -127,7 +129,8 @@
   module.exports = function(POUCHDB_OPTIONS, callback) {
     var dbInfo = getDbInfo();
     var userCtx = getUserCtx();
-    if (!userCtx) {
+    const hasForceLoginCookie = document.cookie.includes('login=force');
+    if (!userCtx || hasForceLoginCookie) {
       var err = new Error('User must reauthenticate');
       err.status = 401;
       return redirectToLogin(dbInfo, err, callback);
@@ -138,6 +141,7 @@
     }
 
     translator.setLocale(userCtx.locale);
+<<<<<<< HEAD
 
     var username = userCtx.name;
     var localDbName = getLocalDbName(dbInfo, username);
@@ -179,6 +183,46 @@
       .catch(function(err) {
         return err;
       })
+=======
+
+    const onServiceWorkerInstalling = () => setUiStatus('DOWNLOAD_APP');
+    const swRegistration = registerServiceWorker(onServiceWorkerInstalling);
+
+    const localDbName = getLocalDbName(dbInfo, userCtx.name);
+    const localDb = window.PouchDB(localDbName, POUCHDB_OPTIONS.local);
+    const remoteDb = window.PouchDB(dbInfo.remote, POUCHDB_OPTIONS.remote);
+
+    const testReplicationNeeded = () => getDdoc(localDb).then(() => false).catch(() => true);
+
+    let isInitialReplicationNeeded;
+    Promise.all([swRegistration, testReplicationNeeded()])
+      .then(function(resolved) {
+        isInitialReplicationNeeded = !!resolved[1];
+
+        if (isInitialReplicationNeeded) {
+          return initialReplication(localDb, remoteDb)
+            .then(testReplicationNeeded)
+            .then(isReplicationStillNeeded => {
+              if (isReplicationStillNeeded) {
+                throw new Error('Initial replication failed');
+              }
+            });
+        }
+      })
+      .then(() => purger(localDb, userCtx, isInitialReplicationNeeded)
+        .on('start', () => setUiStatus('PURGE_INIT'))
+        .on('progress', function(progress) {
+          setUiStatus('PURGE_INFO', {
+            count: progress.purged,
+            percent: Math.floor((progress.processed / progress.total) * 100)
+          });
+        })
+        .on('optimise', () => setUiStatus('PURGE_AFTER'))
+        .catch(console.error)
+      )
+      .then(() => setUiStatus('STARTING_APP'))
+      .catch(err => err)
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       .then(function(err) {
         localDb.close();
         remoteDb.close();
@@ -194,4 +238,5 @@
       });
 
   };
+
 }());

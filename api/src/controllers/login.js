@@ -1,15 +1,21 @@
 const fs = require('fs'),
+  { promisify } = require('util'),
   url = require('url'),
   path = require('path'),
-  request = require('request'),
+  request = require('request-promise-native'),
   _ = require('underscore'),
   auth = require('../auth'),
-  db = require('../db-nano'),
+  environment = require('../environment'),
   config = require('../config'),
   cookie = require('../services/cookie'),
+<<<<<<< HEAD
   SESSION_COOKIE_RE = /AuthSession\=([^;]*);/,
+=======
+  SESSION_COOKIE_RE = /AuthSession=([^;]*);/,
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
   ONE_YEAR = 31536000000,
   logger = require('../logger'),
+  db = require('../db'),
   production = process.env.NODE_ENV === 'production';
 
 let loginTemplate;
@@ -19,54 +25,31 @@ _.templateSettings = {
 };
 
 const safePath = requested => {
-  const appPrefix = path.join(
-    '/',
-    db.settings.db,
-    '_design',
-    db.settings.ddoc,
-    '_rewrite'
-  );
-  const dirPrefix = path.join(appPrefix, '/');
+  const root = '/';
 
   if (!requested) {
-    // no redirect path - return root
-    return appPrefix;
+    return root;
   }
-
   try {
     requested = url.resolve('/', requested);
   } catch (e) {
     // invalid url - return the default
-    return appPrefix;
+    return root;
   }
-
   const parsed = url.parse(requested);
-
-  if (parsed.path !== appPrefix && parsed.path.indexOf(dirPrefix) !== 0) {
-    // path is not relative to the couch app
-    return appPrefix;
-  }
-
   return parsed.path + (parsed.hash || '');
 };
 
-const getLoginTemplate = callback => {
+const getLoginTemplate = () => {
   if (loginTemplate) {
-    return callback(null, loginTemplate);
+    return Promise.resolve(loginTemplate);
   }
-  fs.readFile(
-    path.join(__dirname, '..', 'templates', 'login', 'index.html'),
-    { encoding: 'utf-8' },
-    (err, data) => {
-      if (err) {
-        return callback(err);
-      }
-      loginTemplate = _.template(data);
-      callback(null, loginTemplate);
-    }
-  );
+  const filepath = path.join(__dirname, '..', 'templates', 'login', 'index.html');
+  return promisify(fs.readFile)(filepath, { encoding: 'utf-8' })
+    .then(data => _.template(data));
 };
 
+<<<<<<< HEAD
 const renderLogin = (req, redirect, callback) => {
   const locale = cookie.get(req, 'locale');
   getLoginTemplate((err, template) => {
@@ -75,10 +58,15 @@ const renderLogin = (req, redirect, callback) => {
     }
     const body = template({
       action: path.join('/', db.settings.db, 'login'),
+=======
+const renderLogin = (req, redirect, branding) => {
+  const locale = cookie.get(req, 'locale');
+  return getLoginTemplate().then(template => {
+    return template({
+      action: path.join('/', environment.db, 'login'),
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       redirect: redirect,
-      branding: {
-        name: 'Medic Mobile',
-      },
+      branding: branding,
       translations: {
         login: config.translate('login', locale),
         loginerror: config.translate('login.error', locale),
@@ -88,7 +76,6 @@ const renderLogin = (req, redirect, callback) => {
         password: config.translate('Password', locale),
       },
     });
-    callback(null, body);
   });
 };
 
@@ -102,26 +89,18 @@ const getSessionCookie = res => {
 const createSession = req => {
   const user = req.body.user;
   const password = req.body.password;
-  return new Promise((resolve, reject) => {
-    request.post(
-      {
-        url: url.format({
-          protocol: db.settings.protocol,
-          hostname: db.settings.host,
-          port: db.settings.port,
-          pathname: '_session',
-        }),
-        json: true,
-        body: { name: user, password: password },
-        auth: { user: user, pass: password },
-      },
-      (err, sessionRes) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(sessionRes);
-      }
-    );
+  return request.post({
+    url: url.format({
+      protocol: environment.protocol,
+      hostname: environment.host,
+      port: environment.port,
+      pathname: '_session',
+    }),
+    json: true,
+    resolveWithFullResponse: true,
+    simple: false, // doesn't throw an error on non-200 responses
+    body: { name: user, password: password },
+    auth: { user: user, pass: password },
   });
 };
 
@@ -151,6 +130,21 @@ const setLocaleCookie = (res, locale) => {
   res.cookie('locale', locale, options);
 };
 
+<<<<<<< HEAD
+=======
+const getRedirectUrl = userCtx => {
+  // https://github.com/medic/medic/issues/5035
+  // For Test DB, always redirect to the application, the tests rely on the UI elements of application page
+  let url;
+  if (auth.hasAllPermissions(userCtx, 'can_configure') && environment.db !== 'medic-test') {
+    url = '/admin/';
+  } else {
+    url = '/';
+  }
+  return url;
+};
+
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
 const setCookies = (req, res, sessionRes) => {
   const sessionCookie = getSessionCookie(sessionRes);
   if (!sessionCookie) {
@@ -163,14 +157,52 @@ const setCookies = (req, res, sessionRes) => {
     .then(userCtx => {
       setSessionCookie(res, sessionCookie);
       setUserCtxCookie(res, userCtx);
+<<<<<<< HEAD
       return auth.getUserSettings(userCtx).then(settings => {
         setLocaleCookie(res, settings.language);
         res.json({ success: true });
+=======
+      // Delete login=force cookie
+      res.clearCookie('login');
+      return auth.getUserSettings(userCtx).then(({ language }={}) => {
+        if (language) {
+          setLocaleCookie(res, language);
+        }
+        res.status(302).send(getRedirectUrl(userCtx));
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       });
     })
     .catch(err => {
       logger.error(`Error getting authCtx ${err}`);
       res.status(401).json({ error: 'Error getting authCtx' });
+    });
+};
+
+const getInlineImage = (data, contentType) => `data:${contentType};base64,${data}`;
+
+const getDefaultBranding = () => {
+  const logoPath = path.join(__dirname, '..', 'resources', 'logo', 'medic-logo-light-full.svg');
+  return promisify(fs.readFile)(logoPath, {}).then(logo => {
+    const data = Buffer.from(logo).toString('base64');
+    return {
+      name: 'Medic Mobile',
+      logo: getInlineImage(data, 'image/svg+xml')
+    };
+  });
+};
+
+const getBranding = () => {
+  return db.medic.get('branding', {attachments: true})
+    .then(doc => {
+      const image = doc._attachments[doc.resources.logo];
+      return {
+        name: doc.title,
+        logo: getInlineImage(image.data, image.content_type)
+      };
+    })
+    .catch(err => {
+      logger.warn('Could not find branding doc on CouchDB: %o', err);
+      return getDefaultBranding();
     });
 };
 
@@ -183,9 +215,14 @@ module.exports = {
       .then(userCtx => {
         // already logged in
         setUserCtxCookie(res, userCtx);
+        var hasForceLoginCookie = cookie.get(req, 'login') === 'force';
+        if (hasForceLoginCookie) {
+          throw new Error('Force login');
+        }
         res.redirect(redirect);
       })
       .catch(() => {
+<<<<<<< HEAD
         renderLogin(req, redirect, (err, body) => {
           if (err) {
             logger.error('Could not find login page');
@@ -193,6 +230,12 @@ module.exports = {
           }
           res.send(body);
         });
+=======
+        return getBranding()
+          .then(branding => renderLogin(req, redirect, branding))
+          .then(body => res.send(body))
+          .catch(next);
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       });
   },
   post: (req, res) => {

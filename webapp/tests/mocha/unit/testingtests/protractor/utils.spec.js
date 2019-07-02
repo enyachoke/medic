@@ -14,9 +14,11 @@ describe('Protractor utils', () => {
       const request = sinon.stub(utils, 'request');
       request.onFirstCall().returns(Promise.resolve({rows: [
         {id: '_design/cats', doc: {_id: '_design/cats'}},
-        {id: 'appcache', doc: {_id: 'appcache'}},
+        {id: 'service-worker-meta', doc: {_id: 'service-worker-meta'}},
         {id: 'migration-log', doc: {_id: 'migration-log'}},
         {id: 'resources', doc: {_id: 'resources'}},
+        {id: 'branding', doc: {_id: 'branding'}},
+        {id: 'partners', doc: {_id: 'partners'}},
         {id: '001', doc: {type: 'translations'}},
         {id: '002', doc: {type: 'translations-backup'}},
         {id: '003', doc: {type: 'user-settings'}},

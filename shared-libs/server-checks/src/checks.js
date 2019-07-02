@@ -21,7 +21,7 @@ const nodeVersionCheck = () => {
 const envVarsCheck = () => {
   const envValueAndExample = [
     ['COUCH_URL', 'http://admin:pass@localhost:5984/medic'],
-    ['COUCH_NODE_NAME', 'couchdb@localhost']
+    ['COUCH_NODE_NAME', 'couchdb@127.0.0.1']
   ];
 
   const failures = [];
@@ -50,7 +50,7 @@ const couchDbNoAdminPartyModeCheck = () => {
       } else {
         console.error('Expected a 401 when accessing db without authentication.');
         console.error(`Instead we got a ${statusCode}`);
-        reject(new Error('CouchDB security seems to be misconfigured, see: https://github.com/medic/medic-webapp#enabling-a-secure-couchdb'));
+        reject(new Error('CouchDB security seems to be misconfigured, see: https://github.com/medic/medic#enabling-a-secure-couchdb'));
       }
     });
   });
@@ -75,7 +75,7 @@ const check = (serverUrl) => {
     .then(nodeVersionCheck)
     .then(envVarsCheck)
     .then(couchDbNoAdminPartyModeCheck)
-    .then(couchDbVersionCheck(serverUrl));
+    .then(() => couchDbVersionCheck(serverUrl));
 };
 
 module.exports = {

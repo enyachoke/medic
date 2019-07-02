@@ -1,7 +1,7 @@
 const _ = require('underscore'),
-  db = require('./db-pouch'),
+  db = require('./db'),
   logger = require('./logger'),
-  taskUtils = require('task-utils');
+  taskUtils = require('@medic/task-utils');
 
 const getTaskMessages = function(options, callback) {
   db.medic.query('medic-sms/tasks_messages', options, callback);

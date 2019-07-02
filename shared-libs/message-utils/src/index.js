@@ -5,6 +5,7 @@ var _ = require('underscore'),
     objectPath = require('object-path'),
     moment = require('moment'),
     toBikramSambatLetters = require('bikram-sambat').toBik_text,
+    phoneNumber = require('@medic/phone-number'),
     SMS_TRUNCATION_SUFFIX = '...';
 
 var getParent = function(doc, type) {
@@ -101,6 +102,9 @@ var getRecipient = function(context, recipient) {
   } else if (recipient.indexOf('.') > -1) {
     // Or multiple layers by executing it as a statement
     phone = objectPath.get(context, recipient);
+  } else if (phoneNumber.validate({}, recipient)) {
+    // or a specific phone number
+    phone = recipient;
   }
   return phone || from || recipient;
 };
@@ -155,13 +159,6 @@ var extendedTemplateContext = function(doc, extras) {
 
   if (extras.registrations && extras.registrations.length) {
     _.defaults(templateContext, extractTemplateContext(extras.registrations[0]));
-  }
-
-  if (!extras.patient && extras.registrations && extras.registrations.length) {
-    // If you're providing registrations to the template context you need to
-    // provide the patient contact document as well. Patients can be
-    // "registered" through the UI, only creating a patient and no registration report
-    throw Error('Cannot provide registrations to template context without a patient');
   }
 
   return templateContext;
@@ -232,6 +229,11 @@ exports.generate = function(config, translate, doc, content, recipient, extraCon
   };
 
   var message = exports.template(config, translate, doc, content, extraContext);
+  if (!message || (content.translationKey && message === content.translationKey)) {
+    result.error = 'messages.errors.message.empty';
+    return [ result ];
+  }
+
   var parsed = gsm(message);
   var max = config.multipart_sms_limit || 10;
 
@@ -242,6 +244,14 @@ exports.generate = function(config, translate, doc, content, recipient, extraCon
     // message too long - truncate
     result.message = truncateMessage(parsed.parts, max);
     result.original_message = message;
+  }
+
+  var isMissingPatient = extraContext &&
+                         !extraContext.patient &&
+                         extraContext.registrations &&
+                         extraContext.registrations.length;
+  if (isMissingPatient) {
+    result.error = 'messages.errors.patient.missing';
   }
 
   return [ result ];
@@ -268,6 +278,10 @@ exports.template = function(config, translate, doc, content, extraContext) {
   }
   var context = extendedTemplateContext(doc, extraContext);
   return render(config, template, context, locale);
+};
+
+exports.hasError = function(messages) {
+  return messages && messages[0] && messages[0].error;
 };
 
 exports._getRecipient = getRecipient;

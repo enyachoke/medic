@@ -4,12 +4,12 @@ describe('EditUserCtrl controller', () => {
 
   let jQuery,
       mockEditCurrentUser,
-      mockEditAUser,
       scope,
       translationsDbQuery,
       UpdateUser,
       CreateUser,
       UserSettings,
+      translate,
       Translate,
       userToEdit;
 
@@ -37,7 +37,8 @@ describe('EditUserCtrl controller', () => {
       roles: [ 'district-manager' ],
       language: 'zz'
     };
-    Translate = sinon.stub();
+    translate = sinon.stub();
+    Translate = { fieldIsRequired: sinon.stub() };
 
     jQuery = sinon.stub(window, '$');
     window.$.callThrough();
@@ -56,11 +57,12 @@ describe('EditUserCtrl controller', () => {
       $provide.value('UpdateUser', UpdateUser);
       $provide.value('CreateUser', CreateUser);
       $provide.value('UserSettings', UserSettings);
+      $provide.value('translate', translate);
       $provide.value('Translate', Translate);
 
     });
 
-    inject(($rootScope, $controller) => {
+    inject((translate, $rootScope, $controller) => {
       const createController = model => {
         scope = $rootScope.$new();
         scope.model = model;
@@ -81,19 +83,14 @@ describe('EditUserCtrl controller', () => {
           },
           'Select2Search': sinon.stub(),
           'SetLanguage': sinon.stub(),
-          '$window': {location: {reload: sinon.stub()}}
+          '$window': {location: {reload: sinon.stub()}},
+          '$translate': translate
         });
       };
       mockEditCurrentUser = user => {
         UserSettings.returns(Promise.resolve(user));
         createController();
       };
-
-      mockEditAUser = user => {
-        // Don't mock UserSettings, we're not fetching current user.
-        createController(user);
-      };
-
     });
   });
 
@@ -129,14 +126,13 @@ describe('EditUserCtrl controller', () => {
   // Never when creating a new user, or editing a non-current user.
   describe('$scope.updatePassword', () => {
     it('password must be filled', done => {
+      Translate.fieldIsRequired.withArgs('Password').returns(Promise.resolve('Password field must be filled'));
       mockEditCurrentUser(userToEdit);
-      Translate.withArgs('Password').returns(Promise.resolve('pswd'));
-      Translate.withArgs('field is required', { field: 'pswd' }).returns(Promise.resolve('pswd field must be filled'));
       setTimeout(() => {
         scope.editUserModel.password = '';
         scope.updatePassword();
         setTimeout(() => {
-          chai.expect(scope.errors.password).to.equal('pswd field must be filled');
+          chai.expect(scope.errors.password).to.equal('Password field must be filled');
           done();
         });
       });
@@ -144,7 +140,7 @@ describe('EditUserCtrl controller', () => {
 
     it('password must be long enough', done => {
       mockEditCurrentUser(userToEdit);
-      Translate.withArgs('password.length.minimum', { minimum: 8 }).returns(Promise.resolve('short'));
+      translate.withArgs('password.length.minimum', { minimum: 8 }).returns(Promise.resolve('short'));
       setTimeout(() => {
         scope.editUserModel.password = '2sml4me';
         scope.updatePassword();
@@ -157,7 +153,7 @@ describe('EditUserCtrl controller', () => {
 
     it('password must be hard to brute force', done => {
       mockEditCurrentUser(userToEdit);
-      Translate.withArgs('password.weak').returns(Promise.resolve('hackable'));
+      translate.withArgs('password.weak').returns(Promise.resolve('hackable'));
       setTimeout(() => {
         scope.editUserModel.password = 'password';
         scope.updatePassword();
@@ -171,7 +167,7 @@ describe('EditUserCtrl controller', () => {
     it('error if password and confirm do not match', done => {
       mockEditCurrentUser(userToEdit);
       setTimeout(() => {
-        Translate.withArgs('Passwords must match').returns(Promise.resolve('wrong'));
+        translate.withArgs('Passwords must match').returns(Promise.resolve('wrong'));
         const password = '1QrAs$$3%%kkkk445234234234';
         scope.editUserModel.password = password;
         scope.editUserModel.passwordConfirm = password + 'a';

@@ -1,6 +1,6 @@
 const sinon = require('sinon'),
       chai = require('chai'),
-      db = require('../../src/db-nano'),
+      environment = require('../../src/environment'),
       serverUtils = require('../../src/server-utils'),
       req = {
         url: '',
@@ -14,18 +14,18 @@ const sinon = require('sinon'),
         status: () => {}
       };
 
-let originalDbSettings;
+let originalDb;
 
 describe('Server utils', () => {
 
   beforeEach(() => {
-    originalDbSettings = db.settings;
-    db.settings = { db: 'medic' };
+    originalDb = environment.db;
+    environment.db = 'medic';
   });
 
   afterEach(() => {
+    environment.db = originalDb;
     sinon.restore();
-    db.settings = originalDbSettings;
   });
 
   it('error calls serverError when given string', () => {
@@ -81,6 +81,20 @@ describe('Server utils', () => {
     chai.expect(writeHead.args[0][1]['Content-Type']).to.equal('text/plain');
     chai.expect(end.callCount).to.equal(1);
     chai.expect(end.args[0][0]).to.equal('Server error');
+  });
+
+  it('error 500 for any non-numeric error code', () => {
+    const writeHead = sinon.stub(res, 'writeHead');
+    serverUtils.error({ code: '100' }, req, res);
+    chai.expect(writeHead.callCount).to.eq(1);
+    chai.expect(writeHead.args[0][0]).to.eq(500);
+  });
+
+  it('error 500 for unparseable non-numeric error code', () => {
+    const writeHead = sinon.stub(res, 'writeHead');
+    serverUtils.error({ code: 'foo' }, req, res);
+    chai.expect(writeHead.callCount).to.eq(1);
+    chai.expect(writeHead.args[0][0]).to.eq(500);
   });
 
   it('notLoggedIn redirects to login page for human user', () => {

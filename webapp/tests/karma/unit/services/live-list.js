@@ -64,8 +64,8 @@ describe('LiveListSrv', function() {
     assert.ok(service);
   });
 
-  it('should provide a single API method', function() {
-    assert.deepEqual(_.keys(service), ['$listFor']);
+  it('should provide correct API methods', function() {
+    assert.deepEqual(_.keys(service), ['$listFor', '$init', '$reset']);
   });
 
   describe('failures related to a missing piece of config', function() {
@@ -106,7 +106,7 @@ describe('LiveListSrv', function() {
     service.$listFor('name', config);
 
     // then
-    assert.deepEqual(_.keys(service), ['$listFor', 'name']);
+    assert.deepEqual(_.keys(service), ['$listFor', '$init', '$reset', 'name']);
   });
 
   it('should provide a defined set of functions on initialised lists', function() {
@@ -123,6 +123,7 @@ describe('LiveListSrv', function() {
     // then
     assert.deepEqual(_.keys(service.name), [
       'insert',
+      'invalidateCache',
       'update',
       'remove',
       'getList',
@@ -133,7 +134,7 @@ describe('LiveListSrv', function() {
       'initialised',
       'setSelected',
       'clearSelected',
-      'containsDeleteStub'
+      'setScope'
     ]);
   });
 
@@ -340,6 +341,7 @@ describe('LiveListSrv', function() {
         it('should return false for an empty list', function() {
           // expect
           assert.notOk(service.testing.contains( doc(123) ));
+          assert.notOk(service.testing.contains( 123 ));
         });
 
         it('should return false if supplied item\'s ID does not match an item in the list', function() {
@@ -348,6 +350,8 @@ describe('LiveListSrv', function() {
 
           // expect
           assert.notOk(service.testing.contains( doc(999) ));
+          assert.notOk(service.testing.contains( 999 ));
+          assert.notOk(service.testing.contains( '999' ));
         });
 
         it('true if supplied ID matches an item in the list', function() {
@@ -356,8 +360,11 @@ describe('LiveListSrv', function() {
 
           // expect
           assert.ok(service.testing.contains( doc(1) ));
+          assert.ok(service.testing.contains( 1 ));
           assert.ok(service.testing.contains( doc(2) ));
+          assert.ok(service.testing.contains( 2 ));
           assert.ok(service.testing.contains( doc(3) ));
+          assert.ok(service.testing.contains( 3 ));
         });
       });
 
@@ -395,15 +402,17 @@ describe('LiveListSrv', function() {
 
         it('should not return removed items', function() {
           // given
-          list_of(1, 2, 3);
+          list_of(1, 2, 3, 4);
           assert.deepEqual(service.testing.getList(), [
             { _id: 1 },
             { _id: 2 },
             { _id: 3 },
+            { _id: 4 },
           ]);
 
           // when
           service.testing.remove(doc(2));
+          service.testing.remove(4);
 
           // then
           assert.deepEqual(service.testing.getList(), [
@@ -507,38 +516,73 @@ describe('LiveListSrv', function() {
     });
   });
 
-  describe('containsDeleteStub', () => {
-    beforeEach(function() {
-      var config = {
-        listItem: SIMPLE_LIST_ITEM,
-        orderBy: SIMPLE_ORDER_FUNCTION,
-        selector: '#list',
-      };
-      service.$listFor('testing', config);
+  describe('$init', () => {
+    it('should work when no params are set, with no lists and with missing lists', () => {
+      service.$init();
+      service.$init('foo');
+      service.$init('foo', 'bar');
     });
 
-    it('returns false for non-tombstone, not deleted docs', () => {
-      const doc = { _id: 'a', _rev: 'b', name: 'something' };
-      assert.equal(service.testing.containsDeleteStub(doc), false);
+    it('should set the scope of all given existent lists', () => {
+      const scope = 'foo',
+            config = { listItem: sinon.stub(), orderBy: 'name', selector: 'list' };
+      service.$listFor('one', config);
+      service.$listFor('two', config);
+      service.$listFor('three', config);
+      sinon.spy(service.one, 'setScope');
+      sinon.spy(service.two, 'setScope');
+      sinon.spy(service.three, 'setScope');
+      service.$init(scope, 'one', 'two', 'three', 'four', 'five');
+      assert.equal(service.one.setScope.callCount, 1);
+      assert.deepEqual(service.one.setScope.args[0], [scope]);
+      assert.equal(service.two.setScope.callCount, 1);
+      assert.deepEqual(service.two.setScope.args[0], [scope]);
+      assert.equal(service.three.setScope.callCount, 1);
+      assert.deepEqual(service.three.setScope.args[0], [scope]);
+      assert.equal(service.four, undefined);
+      assert.equal(service.five, undefined);
+    });
+  });
 
-      const doc2 = { _id: 'a', _rev: 'b', name: 'something', lastname: 'else' };
-      assert.equal(service.testing.containsDeleteStub(doc2), false);
+  describe('$reset', () => {
+    it('should work when no lists or with missing lists', () => {
+      service.$reset();
+      service.$reset('foo');
+      service.$reset('foo', 'bar');
     });
 
-    it('returns false for non-tombstone, deleted docs', () => {
-      const doc = { _id: 'a', _rev: 'b', name: 'something', reported: 'now', _deleted: true };
-      assert.equal(service.testing.containsDeleteStub(doc), false);
-    });
+    it('should empty and reset scope of given existent lists', () => {
+      const scope = 'foo',
+            config = { listItem: sinon.stub(), orderBy: sinon.stub(), selector: 'list' };
+      service.$listFor('one', config);
+      service.$listFor('two', config);
+      service.$listFor('three', config);
+      service.one.setScope(scope);
+      service.one.set(['a', 'b', 'c']);
+      service.two.setScope(scope);
+      service.two.set(['1', '2', '3']);
+      service.three.setScope(scope);
+      service.three.set(['somewhere']);
 
-    it('returns false for tombstone deleted not-contained docs', () => {
-      const doc = { _id: 'a', _rev: 'b', _deleted: true };
-      assert.equal(service.testing.containsDeleteStub(doc), false);
-    });
+      sinon.spy(service.one, 'setScope');
+      sinon.spy(service.two, 'setScope');
+      sinon.spy(service.three, 'setScope');
 
-    it('returns true for tombstone deleted docs', () => {
-      const doc = { _id: 'a', _rev: 'b', _deleted: true };
-      service.testing.set([{ _id: 'a' }]);
-      assert.equal(service.testing.containsDeleteStub(doc), true);
+      service.$reset('one', 'two', 'three', 'four', 'five');
+      assert.deepEqual(service.one.getList(), []);
+      assert.equal(service.one.setScope.callCount, 1);
+      assert.deepEqual(service.one.setScope.args[0], []);
+
+      assert.deepEqual(service.two.getList(), []);
+      assert.equal(service.two.setScope.callCount, 1);
+      assert.deepEqual(service.two.setScope.args[0], []);
+
+      assert.deepEqual(service.three.getList(), []);
+      assert.equal(service.three.setScope.callCount, 1);
+      assert.deepEqual(service.three.setScope.args[0], []);
+
+      assert.equal(service.four, undefined);
+      assert.equal(service.five, undefined);
     });
   });
 

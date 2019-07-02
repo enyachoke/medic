@@ -5,7 +5,7 @@
 
     <a ui-sref="home">
       <div class="logo">
-        <img class="logo-full" src="img/medic-logo-light-full.svg" title="Medic Mobile | {{version}}" />
+        <div class="logo-full" ng-bind-html="'logo' | headerLogo"></div>
       </div>
     </a>
 
@@ -48,10 +48,10 @@
               <span translate>Analytics</span>
             </a>
           </li>
-          <li role="presentation" mm-auth="can_configure" mm-auth-online="true">
-            <a ng-href="{{adminUrl}}" role="menuitem" tabindex="-1" target="_blank" rel="noopener noreferrer">
+          <li role="presentation" mm-auth="can_configure" mm-auth-online="true" class="desktop-only">
+            <a ng-href="{{adminUrl}}" role="menuitem" tabindex="-1" rel="noopener noreferrer">
               <i class="fa fa-fw fa-cog"></i>
-              <span translate>Configuration</span>
+              <span translate>admin.app.name</span>
             </a>
           </li>
           <li role="presentation" mm-auth="can_configure">
@@ -92,16 +92,16 @@
           </li>
 
           <li role="separator" class="divider" ng-if="!replicationStatus.disabled"></li>
-          <li role="presentation disabled" ng-show="!replicationStatus.disabled && replicationStatus.current !== 'unknown'">
-            <a class="no-click">
-              <span translate>sync.last_success</span> <i class="fa fa-fw fa-refresh"></i><br>
-              <span ng-bind-html="replicationStatus.lastCompleted | relativeDate"></span>
+          <li role="presentation disabled" ng-if="!replicationStatus.disabled && !replicationStatus.current.disableSyncButton">
+            <a role="menuitem" tabindex="-1" ng-click="replicate()">
+              <i class="fa fa-fw fa-refresh"></i>
+              <span translate>sync.now</span>
             </a>
           </li>
           <li role="presentation disabled" ng-if="!replicationStatus.disabled" class="sync-status">
-            <a ng-class="replicationStatus.current" class="no-click">
-              <i class="fa fa-fw" ng-class="replicationStatus.icon"></i>
-              <span translate>{{replicationStatus.textKey}}</span>
+            <a class="no-click" ng-class="replicationStatus.current.className">
+              <i class="fa fa-fw" ng-class="replicationStatus.current.icon"></i>
+              <span translate>{{replicationStatus.current.key}}</span>
             </a>
           </li>
         </ul>

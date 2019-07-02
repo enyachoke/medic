@@ -1,9 +1,11 @@
-var _ = require('underscore'),
-    async = require('async'),
-    config = require('../config'),
-    messages = require('../lib/messages'),
-    later = require('later'),
-    moment = require('moment');
+const _ = require('underscore'),
+      async = require('async'),
+      config = require('../config'),
+      messages = config.getTransitionsLib().messages,
+      later = require('later'),
+      moment = require('moment'),
+      db = require('../db'),
+      lineage = require('@medic/lineage')(Promise, db.medic);
 
 // set later to use local time
 later.date.localTime();
@@ -11,7 +13,7 @@ later.date.localTime();
 function isConfigValid(config) {
     return Boolean(
         config.form &&
-        config.message &&
+        (config.message || config.translation_key) &&
         (config.text_expression || config.cron)
     );
 }
@@ -36,16 +38,14 @@ module.exports = {
     isConfigValid: isConfigValid,
     getSchedule: getSchedule,
     // called from schedule/index.js on the hour, for now
-    execute: function(options, callback) {
-        var db = options.db,
-            reminders = config.get('reminders') || [];
+    execute: callback => {
+        var reminders = config.get('reminders') || [];
 
         async.eachSeries(reminders, function(reminder, callback) {
             if (!isConfigValid(reminder)) {
                 return callback();
             }
             module.exports.runReminder({
-                db: db,
                 reminder: reminder
             }, callback);
         }, callback);
@@ -81,7 +81,7 @@ module.exports = {
         // if it's already been sent, it will have a matching task with the right form/ts
         send = !_.findWhere(clinic.tasks, {
             form: reminder.form,
-            ts: ts.toISOString()
+            timestamp: ts.toISOString()
         });
 
         // if send, check for mute on reminder, and clinic has sent_forms for the reminder
@@ -111,10 +111,8 @@ module.exports = {
         }
     },
     getClinics: function(options, callback) {
-        var db = options.db;
-
         // gets all clinics
-        db.medic.view('medic-client', 'doc_by_type', {
+        db.medic.query('medic-client/doc_by_type', {
             startkey: [ 'clinic' ],
             endkey: [ 'clinic', {} ],
             include_docs: true
@@ -130,12 +128,14 @@ module.exports = {
                 return module.exports.canSend(options, clinic);
             });
 
-            callback(err, clinics);
+            lineage
+              .hydrateDocs(clinics)
+              .then(clinics => callback(null, clinics))
+              .catch(callback);
         });
     },
     sendReminder: function(options, callback) {
         var clinic = options.clinic,
-            db = options.db,
             moment = options.moment,
             reminder = options.reminder,
             context = {
@@ -149,17 +149,18 @@ module.exports = {
         const task = messages.addMessage(clinic, reminder, 'clinic', context);
         if (task) {
             task.form = reminder.form;
-            task.ts = moment.toISOString();
+            task.timestamp = moment.toISOString();
             task.type = 'reminder';
         }
-        db.medic.insert(clinic, callback);
+        lineage.minify(clinic);
+        db.medic.put(clinic, callback);
     },
     sendReminders: function(options, callback) {
         module.exports.getClinics(options, function(err, clinics) {
             if (err) {
                 callback(err);
             } else {
-                async.each(clinics, function(clinic, callback) {
+                async.eachSeries(clinics, function(clinic, callback) {
                     var opts = _.extend({}, options, {
                         clinic: clinic
                     });
@@ -189,13 +190,12 @@ module.exports = {
         });
     },
     getReminderWindow: function(options, callback) {
-        var db = options.db,
-            now = moment(),
+        var now = moment(),
             // at the most, look a day back
             floor = now.clone().startOf('hour').subtract(1, 'day'),
             form = options.reminder && options.reminder.form;
 
-        db.medic.view('medic', 'sent_reminders', {
+        db.medic.query('medic-sms/sent_reminders', {
             descending: true,
             limit: 1,
             startkey: [form, now.toISOString()],
@@ -214,5 +214,6 @@ module.exports = {
                 }
             }
         });
-    }
+    },
+    _lineage: lineage
 };

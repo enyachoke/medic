@@ -1,9 +1,9 @@
-const db = require('../db-pouch'),
+const db = require('../db'),
   authorization = require('./authorization'),
   _ = require('underscore'),
   logger = require('../logger');
 
-const utils = require('bulk-docs-utils')({
+const utils = require('@medic/bulk-docs-utils')({
   Promise: Promise,
   DB: db.medic,
 });

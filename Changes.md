@@ -1,5 +1,6 @@
 # Medic Mobile Release Notes
 
+<<<<<<< HEAD
 ## 3.3.0
 
 ### Features
@@ -1778,3 +1779,6 @@ _January 21, 2014_
     Outgoing Messages
     Scheduled Tasks
 ```
+=======
+Release notes are now published in the [release-notes](https://github.com/medic/medic/tree/master/release-notes) directory.
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41

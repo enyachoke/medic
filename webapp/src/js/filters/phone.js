@@ -1,4 +1,4 @@
-var phoneNumber = require('phone-number');
+var phoneNumber = require('@medic/phone-number');
 
 angular.module('inboxFilters').filter('phone',
   function(

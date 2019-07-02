@@ -68,8 +68,8 @@ describe('validate doc update', () => {
     done();
   });
 
-  it('only db and national admins are allowed change appcache doc', done => {
-    const doc = { _id: 'appcache' };
+  it('only db and national admins are allowed change service-worker-meta doc', done => {
+    const doc = { _id: 'service-worker-meta' };
     assert.isOk(allowedOnServer(userCtx({roles: [ '_admin' ]}), doc));
     assert.isOk(allowedOnServer(userCtx({roles: [ 'national_admin' ]}), doc));
     assert.deepEqual(allowedOnServer(userCtx({roles: [ ]}), doc), disallowed('You are not authorized to edit admin only docs'));
@@ -97,6 +97,22 @@ describe('validate doc update', () => {
     assert.isOk(allowedOnServer(userCtx({roles: [ '_admin' ], facility_id: 'abc' }), doc));
     assert.isOk(allowedOnServer(userCtx({roles: [ 'national_admin' ], facility_id: 'abc' }), doc));
     assert.deepEqual(allowedOnServer(userCtx({roles: [ 'district_admin' ], facility_id: 'abc' }), doc), disallowed('You are not authorized to edit your own place'));
+    done();
+  });
+
+  it('only db and national admins are allowed to change header logo', done => {
+    const doc = { _id: 'branding' };
+    assert.isOk(allowedOnServer(userCtx({roles: [ '_admin' ]}), doc));
+    assert.isOk(allowedOnServer(userCtx({roles: [ 'national_admin' ]}), doc));
+    assert.deepEqual(allowedOnServer(userCtx({roles: [ ]}), doc), disallowed('You are not authorized to edit admin only docs'));
+    done();
+  });
+
+  it('only db and national admins are allowed to add partners', done => {
+    const doc = { _id: 'partners' };
+    assert.isOk(allowedOnServer(userCtx({roles: [ '_admin' ]}), doc));
+    assert.isOk(allowedOnServer(userCtx({roles: [ 'national_admin' ]}), doc));
+    assert.deepEqual(allowedOnServer(userCtx({roles: [ ]}), doc), disallowed('You are not authorized to edit admin only docs'));
     done();
   });
 

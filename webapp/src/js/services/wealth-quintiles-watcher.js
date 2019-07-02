@@ -17,11 +17,14 @@ angular.module('inboxServices').factory('WealthQuintilesWatcher',
         Changes({
           key: 'wealth-quintiles',
           filter: function(change) {
-            return change.doc.fields && Object.keys(change.doc.fields).indexOf('NationalQuintile') !== -1;
+            return change.doc &&
+                   change.doc.fields &&
+                   Object.keys(change.doc.fields).indexOf('NationalQuintile') !== -1;
           },
           callback: function(change) {
             DB().query('medic-client/contacts_by_parent', {
-              key: change.doc.fields.place_id,
+              startkey: [change.doc.fields.place_id],
+              endkey: [change.doc.fields.place_id, {}],
               include_docs: true
             }).then(function(result) {
                 var updatedDocs = result.rows.map(function(row) {

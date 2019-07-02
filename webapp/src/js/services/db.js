@@ -1,89 +1,84 @@
-var _ = require('underscore'),
-    USER_DB_SUFFIX = 'user',
-    META_DB_SUFFIX = 'meta';
-
 // Regex to test for characters that are invalid in db names
 // Only lowercase characters (a-z), digits (0-9), and any of the characters _, $, (, ), +, -, and / are allowed.
 // https://wiki.apache.org/couchdb/HTTP_database_API#Naming_and_Addressing
-var DB_NAME_BLACKLIST = /[^a-z0-9_$()+/-]/g;
+const DISALLOWED_CHARS = /[^a-z0-9_$()+/-]/g;
+const USER_DB_SUFFIX = 'user';
+const META_DB_SUFFIX = 'meta';
+const USERS_DB_SUFFIX = 'users';
 
 angular.module('inboxServices').factory('DB',
   function(
-    $window,
+    $timeout,
     Location,
-    pouchDB,
     POUCHDB_OPTIONS,
-    Session
+    Session,
+    pouchDB
   ) {
 
     'use strict';
     'ngInject';
 
-    var cache = {};
-    var isOnlineOnly = Session.isOnlineOnly();
+    const cache = {};
+    const isOnlineOnly = Session.isOnlineOnly();
 
-    var getUsername = function(remote) {
-      var username = Session.userCtx().name;
+    const getUsername = remote => {
+      const username = Session.userCtx().name;
       if (!remote) {
         return username;
       }
       // escape username in case they user invalid characters
-      return username.replace(DB_NAME_BLACKLIST, function(match) {
-        return '(' + match.charCodeAt(0) + ')';
-      });
+      return username.replace(DISALLOWED_CHARS, match => `(${match.charCodeAt(0)})`);
     };
 
-    var getDbName = function(remote, meta) {
-      var parts = [];
+    const getDbName = (remote, meta, usersMeta) => {
+      const parts = [];
       if (remote) {
         parts.push(Location.url);
       } else {
         parts.push(Location.dbName);
       }
-      if (!remote || meta) {
+      if ((!remote || meta) && !usersMeta) {
         parts.push(USER_DB_SUFFIX);
         parts.push(getUsername(remote));
+      } else if (usersMeta) {
+        parts.push(USERS_DB_SUFFIX);
       }
-      if (meta) {
+      if (meta || usersMeta) {
         parts.push(META_DB_SUFFIX);
       }
       return parts.join('-');
     };
 
-    var getParams = function(remote, meta) {
-      var params = { };
-      if (remote) {
-        if (meta) {
-          params.skip_setup = false;
-        }
-        _.defaults(params, POUCHDB_OPTIONS.remote);
-      } else {
-        _.defaults(params, POUCHDB_OPTIONS.local);
+    const getParams = (remote, meta, usersMeta) => {
+      const clone = Object.assign({}, remote ? POUCHDB_OPTIONS.remote : POUCHDB_OPTIONS.local);
+      if (remote && meta) {
+        // Don't create user DBs remotely, we do this ourselves in /api/services/user-db:create,
+        // which is called in routing when a user tries to access the DB
+        clone.skip_setup = false;
       }
-      return params;
+      if (remote && usersMeta) {
+        clone.skip_setup = false;
+      }
+      return clone;
     };
 
-    var get = function(options) {
-      var userCtx = Session.userCtx();
-      if (!userCtx) {
+    const get = ({ remote=isOnlineOnly, meta=false, usersMeta=false }={}) => {
+      if (!Session.userCtx()) {
         return Session.navigateToLogin();
       }
-      options = options || {};
-      _.defaults(options, {
-        remote: isOnlineOnly,
-        meta: false
-      });
-      var name = getDbName(options.remote, options.meta);
+      const name = getDbName(remote, meta, usersMeta);
       if (!cache[name]) {
-        var db = pouchDB(name, getParams(options.remote, options.meta));
-        cache[name] = db;
+        cache[name] = pouchDB(name, getParams(remote, meta, usersMeta));
       }
       return cache[name];
     };
 
     if (!isOnlineOnly) {
-      get({ local: true }).viewCleanup();
-      get({ local: true, meta: true }).viewCleanup();
+      // delay the cleanup so it's out of the main startup sequence
+      $timeout(() => {
+        get().viewCleanup();
+        get({ meta: true }).viewCleanup();
+      }, 1000);
     }
 
     return get;

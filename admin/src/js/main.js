@@ -11,7 +11,9 @@ require('angular-sanitize');
 require('angular-translate');
 require('angular-translate-interpolation-messageformat');
 require('angular-ui-bootstrap');
-require('angular-ui-router');
+require('@uirouter/angularjs');
+
+require('ng-redux');
 
 angular.module('controllers', []);
 require('./controllers/main');
@@ -29,6 +31,8 @@ require('./controllers/export-reports');
 require('./controllers/forms-json');
 require('./controllers/forms-xml');
 require('./controllers/icons');
+require('./controllers/images-branding');
+require('./controllers/images-partners');
 require('./controllers/import-translation');
 require('./controllers/message-queue');
 require('./controllers/message-test');
@@ -50,9 +54,12 @@ require('./directives/relative-date');
 require('./directives/release');
 
 angular.module('filters', ['ngSanitize']);
-require('./filters/resource-icon');
 require('./filters/translate-from');
 require('./filters/build-version');
+
+// filters we borrow from webapp
+angular.module('inboxFilters', []);
+require('../../../webapp/src/js/filters/resource-icon');
 
 angular.module('services', []);
 require('./services/blob');
@@ -73,8 +80,8 @@ require('../../../webapp/src/js/services/calendar-interval');
 require('../../../webapp/src/js/services/changes');
 require('../../../webapp/src/js/services/contact-muted');
 require('../../../webapp/src/js/services/contact-schema');
+require('../../../webapp/src/js/services/contact-view-model-generator');
 require('../../../webapp/src/js/services/db');
-require('../../../webapp/src/js/services/download-url');
 require('../../../webapp/src/js/services/export');
 require('../../../webapp/src/js/services/extract-lineage');
 require('../../../webapp/src/js/services/file-reader');
@@ -93,6 +100,7 @@ require('../../../webapp/src/js/services/search');
 require('../../../webapp/src/js/services/select2-search');
 require('../../../webapp/src/js/services/settings');
 require('../../../webapp/src/js/services/session');
+require('../../../webapp/src/js/services/telemetry');
 require('../../../webapp/src/js/services/translate');
 require('../../../webapp/src/js/services/translate-from');
 require('../../../webapp/src/js/services/translation-loader');
@@ -100,14 +108,19 @@ require('../../../webapp/src/js/services/translation-null-interpolation');
 require('../../../webapp/src/js/services/update-settings');
 require('../../../webapp/src/js/services/update-user');
 require('../../../webapp/src/js/services/user');
+require('../../../webapp/src/js/actions');
+require('../../../webapp/src/js/selectors');
+require('../../../webapp/src/js/reducers');
 
-var app = angular.module('adminApp', [
+angular.module('adminApp', [
+  'ngRoute',
   'controllers',
   'directives',
   'filters',
+  'inboxFilters',
   'inboxServices',
   'ipCookie',
-  'ngRoute',
+  'ngRedux',
   'pascalprecht.translate',
   'pouchdb',
   'services',
@@ -115,7 +128,7 @@ var app = angular.module('adminApp', [
   'ui.router',
 ]);
 
-app.constant('POUCHDB_OPTIONS', {
+angular.module('adminApp').constant('POUCHDB_OPTIONS', {
   local: { auto_compaction: true },
   remote: {
     skip_setup: true,
@@ -127,11 +140,13 @@ app.constant('POUCHDB_OPTIONS', {
   }
 });
 
-app.config(function(
+angular.module('adminApp').config(function(
   $compileProvider,
   $locationProvider,
+  $ngReduxProvider,
   $stateProvider,
-  $translateProvider
+  $translateProvider,
+  Reducers
 ) {
   'ngInject';
 
@@ -143,6 +158,8 @@ app.config(function(
   $translateProvider.useSanitizeValueStrategy('escape');
   $translateProvider.addInterpolation('$translateMessageFormatInterpolation');
   $translateProvider.addInterpolation('TranslationNullInterpolation');
+
+  $ngReduxProvider.createStoreWith(Reducers, []);
 
   $stateProvider
     .state('settings', {
@@ -243,10 +260,36 @@ app.config(function(
         }
       }
     })
-    .state('icons', {
+    .state('images', {
+      url: '/images',
+      templateUrl: 'templates/images.html'
+    })
+    .state('images.icons', {
       url: '/icons',
-      controller: 'IconsCtrl',
-      templateUrl: 'templates/icons.html'
+      views: {
+        tab: {
+          controller: 'IconsCtrl',
+          templateUrl: 'templates/images_icons.html'
+        }
+      }
+    })
+    .state('images.branding', {
+      url: '/branding',
+      views: {
+        tab: {
+          controller: 'ImagesBrandingCtrl',
+          templateUrl: 'templates/images_branding.html'
+        }
+      }
+    })
+    .state('images.partners', {
+      url: '/partners',
+      views: {
+        tab: {
+          controller: 'ImagesPartnersCtrl',
+          templateUrl: 'templates/images_partners.html'
+        }
+      }
     })
     .state('authorization', {
       url: '/authorization',

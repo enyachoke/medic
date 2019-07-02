@@ -1,6 +1,6 @@
-var lineageFactory = require('lineage'),
-    messageUtils = require('message-utils'),
-    registrationUtils = require('registration-utils');
+var lineageFactory = require('@medic/lineage'),
+    messageUtils = require('@medic/message-utils'),
+    registrationUtils = require('@medic/registration-utils');
 
 angular.module('services').factory('MessageQueueUtils',
   function(
@@ -222,7 +222,8 @@ angular.module('services').factory('MessageQueue',
           stateHistory: message.task.state_history,
           content: message.sms.message,
           due: message.due,
-          link: !!message.doc.form
+          link: !!message.doc.form,
+          error: message.sms.error || false
         };
       });
     };
@@ -287,7 +288,7 @@ angular.module('services').factory('MessageQueue',
               return language &&
                      language.code &&
                      language.code !== 'en' &&
-                     $translate('admin.message.queue', {}, null, null, language.code);
+                     $translate('admin.message.queue', {}, null, 'admin.message.queue', language.code);
             }));
           })
           .catch(function(err) {

@@ -1,5 +1,4 @@
-var feedback = require('../modules/feedback'),
-  _ = require('underscore'),
+var _ = require('underscore'),
   bootstrapTranslator = require('./../bootstrapper/translator'),
   moment = require('moment');
 
@@ -8,98 +7,178 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
 (function() {
   'use strict';
 
-  var inboxControllers = angular.module('inboxControllers', []);
+  angular.module('inboxControllers', []);
 
-  inboxControllers.controller('InboxCtrl', function(
+  angular.module('inboxControllers').controller('InboxCtrl', function(
     $log,
+    $ngRedux,
     $q,
     $rootScope,
     $scope,
     $state,
     $stateParams,
     $timeout,
+    $transitions,
     $translate,
     $window,
     APP_CONFIG,
+    Actions,
     Auth,
     Changes,
     CheckDate,
     ContactSchema,
     CountMessages,
-    DB,
     DBSync,
+    DatabaseConnectionMonitor,
     Debug,
     Enketo,
-    PlaceHierarchy,
+    Feedback,
     JsonForms,
     Language,
     LiveList,
     LiveListConfig,
     Location,
     Modal,
+    PlaceHierarchy,
+    RecurringProcessManager,
+    ResourceIcons,
     RulesEngine,
-    Select2Search,
-    SendMessage,
+    Selectors,
     Session,
     SetLanguage,
     Settings,
-    Snackbar,
+    Telemetry,
     Tour,
     TranslateFrom,
+    TranslationLoader,
     UnreadRecords,
+    UpdateServiceWorker,
     UpdateSettings,
     UpdateUser,
     UserSettings,
     WealthQuintilesWatcher,
+<<<<<<< HEAD
     XmlForms,
     RecurringProcessManager,
     DatabaseConnectionMonitor
+=======
+    XmlForms
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
   ) {
     'ngInject';
 
+    $window.startupTimes.angularBootstrapped = performance.now();
+    Telemetry.record(
+      'boot_time:1:to_first_code_execution',
+      $window.startupTimes.firstCodeExecution - $window.startupTimes.start
+    );
+    Telemetry.record(
+      'boot_time:2:to_bootstrap',
+      $window.startupTimes.bootstrapped - $window.startupTimes.firstCodeExecution
+    );
+    Telemetry.record(
+      'boot_time:3:to_angular_bootstrap',
+      $window.startupTimes.angularBootstrapped - $window.startupTimes.bootstrapped
+    );
+
+    var ctrl = this;
+    var mapStateToTarget = function(state) {
+      return {
+        cancelCallback: Selectors.getCancelCallback(state),
+        enketoEdited: Selectors.getEnketoEditedStatus(state),
+        enketoSaving: Selectors.getEnketoSavingStatus(state),
+        selectMode: Selectors.getSelectMode(state)
+      };
+    };
+    var mapDispatchToTarget = function(dispatch) {
+      var actions = Actions(dispatch);
+      return {
+        setEnketoEditedStatus: actions.setEnketoEditedStatus,
+        setSelectMode: actions.setSelectMode
+      };
+    };
+    var unsubscribe = $ngRedux.connect(mapStateToTarget, mapDispatchToTarget)(ctrl);
+
     Session.init();
 
-    if (window.location.href.indexOf('localhost') !== -1) {
+    if ($window.location.href.indexOf('localhost') !== -1) {
       Debug.set(Debug.get()); // Initialize with cookie
     } else {
       // Disable debug for everything but localhost
       Debug.set(false);
     }
 
+    const SYNC_STATUS = {
+      inProgress: {
+        icon: 'fa-refresh',
+        key: 'sync.status.in_progress',
+        disableSyncButton: true
+      },
+      success: {
+        icon: 'fa-check',
+        key: 'sync.status.not_required',
+        className: 'success'
+      },
+      required: {
+        icon: 'fa-exclamation-triangle',
+        key: 'sync.status.required',
+        className: 'required'
+      },
+      unknown: {
+        icon: 'fa-question-circle',
+        key: 'sync.status.unknown'
+      }
+    };
+
     $scope.replicationStatus = {
       disabled: false,
       lastSuccess: {},
-      current: 'unknown',
-      textKey: 'sync.status.unknown',
+      lastTrigger: undefined,
+      current: SYNC_STATUS.unknown,
     };
-    var SYNC_ICON = {
-      in_progress: 'fa-refresh',
-      not_required: 'fa-check',
-      required: 'fa-exclamation-triangle',
-      unknown: 'fa-question-circle',
-    };
-    DBSync(function(update) {
-      if (update.disabled) {
+
+    DBSync.addUpdateListener(({ state, to, from }) => {
+      if (state === 'disabled') {
         $scope.replicationStatus.disabled = true;
-        // admins have potentially too much data so bypass local pouch
-        $log.debug('You have administrative privileges; not replicating');
         return;
       }
-
-      var now = Date.now();
-      if (update.status !== 'required') {
-        var last = $scope.replicationStatus.lastSuccess[update.direction];
-        $scope.replicationStatus.lastSuccess[update.direction] = now;
-        var delay = last ? (now - last) / 1000 : 'unknown';
-        $log.info(
-          'Replicate ' +
-            update.direction +
-            ' server successful with ' +
-            delay +
-            ' seconds since the previous successful replication.'
-        );
+      if (state === 'unknown') {
+        $scope.replicationStatus.current = SYNC_STATUS.unknown;
+        return;
       }
+      const now = Date.now();
+      const lastTrigger = $scope.replicationStatus.lastTrigger;
+      const delay = lastTrigger ? (now - lastTrigger) / 1000 : 'unknown';
+      if (state === 'inProgress') {
+        $scope.replicationStatus.current = SYNC_STATUS.inProgress;
+        $scope.replicationStatus.lastTrigger = now;
+        $log.info(`Replication started after ${delay} seconds since previous attempt`);
+        return;
+      }
+      if (to === 'success') {
+        $scope.replicationStatus.lastSuccess.to = now;
+      }
+      if (from === 'success') {
+        $scope.replicationStatus.lastSuccess.from = now;
+      }
+      if (to === 'success' && from === 'success') {
+        $log.info(`Replication succeeded after ${delay} seconds`);
+        $scope.replicationStatus.current = SYNC_STATUS.success;
+      } else {
+        $log.info(`Replication failed after ${delay} seconds`);
+        $scope.replicationStatus.current = SYNC_STATUS.required;
+      }
+    });
 
+    const setAppTitle = () => {
+      ResourceIcons.getAppTitle().then(title => {
+        document.title = title;
+        $('.header-logo').attr('title', `${title} | ${APP_CONFIG.version}`);
+      });
+    };
+    setAppTitle();
+
+<<<<<<< HEAD
       if (update.direction === 'to') {
         $scope.replicationStatus.current = update.status;
         $scope.replicationStatus.textKey = 'sync.status.' + update.status;
@@ -112,33 +191,49 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
           });
         }
       }
+=======
+    Changes({
+      key: 'branding-icon',
+      filter: change => change.id === 'branding',
+      callback: () => setAppTitle()
     });
+
+    $window.addEventListener('online', () => DBSync.setOnlineStatus(true), false);
+    $window.addEventListener('offline', () => DBSync.setOnlineStatus(false), false);
+    Changes({
+      key: 'sync-status',
+      callback: function() {
+        if (!DBSync.isSyncInProgress()) {
+          $scope.replicationStatus.current = SYNC_STATUS.required;
+        }
+      },
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
+    });
+    DBSync.sync();
 
     // BootstrapTranslator is used because $translator.onReady has not fired
     $('.bootstrap-layer .status').html(bootstrapTranslator.translate('LOAD_RULES'));
 
     RulesEngine.init.catch(function() {}).then(function() {
       $scope.dbWarmedUp = true;
+
+      var dbWarmed = performance.now();
+      Telemetry.record(
+        'boot_time:4:to_db_warmed',
+        dbWarmed - $window.startupTimes.bootstrapped
+      );
+      Telemetry.record('boot_time', dbWarmed - $window.startupTimes.start);
+
+      delete $window.startupTimes;
     });
 
-    feedback.init({
-      saveDoc: function(doc, callback) {
-        DB()
-          .post(doc)
-          .then(function() {
-            callback();
-          })
-          .catch(callback);
-      },
-      getUserCtx: function(callback) {
-        callback(null, Session.userCtx());
-      },
-    });
+    Feedback.init();
 
     LiveListConfig($scope);
     CheckDate();
 
     $scope.loadingContent = false;
+    $scope.loadingSubActionBar = false;
     $scope.error = false;
     $scope.errorSyntax = false;
     $scope.appending = false;
@@ -150,7 +245,6 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
     $scope.tours = [];
     $scope.baseUrl = Location.path;
     $scope.adminUrl = Location.adminPath;
-    $scope.enketoStatus = { saving: false };
     $scope.isAdmin = Session.isAdmin();
 
     if (
@@ -190,7 +284,7 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
 
     $scope.$on('HideContent', function() {
       $timeout(function() {
-        if ($scope.cancelCallback) {
+        if (ctrl.cancelCallback) {
           $scope.navigationCancel();
         } else {
           $scope.clearSelected();
@@ -198,6 +292,7 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
       });
     });
 
+<<<<<<< HEAD
     $rootScope.$on('$stateChangeStart', function (event, toState, toParams, fromState){
       if (!$scope.enketoStatus.edited){
         if (toState.name.indexOf('reports') === -1 || toState.name.indexOf('contacts') === -1 || toState.name.indexOf('tasks') === -1 || toState.name.indexOf('messages.detail') === -1) {
@@ -216,19 +311,34 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
       if ($scope.cancelCallback){
         event.preventDefault();
         $scope.navigationCancel();
+=======
+    $transitions.onBefore({}, (trans) => {
+      if (ctrl.enketoEdited && ctrl.cancelCallback) {
+        $scope.navigationCancel({ to: trans.to(), params: trans.params() });
+        return false;
+      }
+    });
+
+    $transitions.onStart({}, function(trans) {
+      const statesToUnsetSelected = ['contacts', 'messages', 'reports', 'tasks'];
+      const parentState = statesToUnsetSelected.find(state => trans.from().name.startsWith(state));
+      // unset selected when states have different base state and only when source state has selected property
+      if (parentState && !trans.to().name.startsWith(parentState)) {
+        $scope.unsetSelected();
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
       }
     });
 
     // User wants to cancel current flow, or pressed back button, etc.
-    $scope.navigationCancel = function() {
-      if ($scope.enketoStatus.saving) {
+    $scope.navigationCancel = function(trans) {
+      if (ctrl.enketoSaving) {
         // wait for save to finish
         return;
       }
-      if (!$scope.enketoStatus.edited) {
+      if (!ctrl.enketoEdited) {
         // form hasn't been modified - return immediately
-        if ($scope.cancelCallback) {
-          $scope.cancelCallback();
+        if (ctrl.cancelCallback) {
+          ctrl.cancelCallback();
         }
         return;
       }
@@ -238,9 +348,12 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
         controller: 'NavigationConfirmCtrl',
         singleton: true,
       }).then(function() {
-        $scope.enketoStatus.edited = false;
-        if ($scope.cancelCallback) {
-          $scope.cancelCallback();
+        ctrl.setEnketoEditedStatus(false);
+        if (trans) {
+          return $state.go(trans.to, trans.params);
+        }
+        if (ctrl.cancelCallback) {
+          ctrl.cancelCallback();
         }
       });
     };
@@ -283,19 +396,11 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
     };
 
     $scope.setShowContent = function(showContent) {
-      if (showContent && $scope.selectMode) {
+      if (showContent && ctrl.selectMode) {
         // when in select mode we never show the RHS on mobile
         return;
       }
       $scope.showContent = showContent;
-    };
-
-    $scope.clearCancelTarget = function() {
-      delete $scope.cancelCallback;
-    };
-
-    $scope.setCancelTarget = function(callback) {
-      $scope.cancelCallback = callback;
     };
 
     $scope.setTitle = function(title) {
@@ -307,10 +412,14 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
       $scope.setShowContent(true);
     };
 
-    $scope.$on('$stateChangeSuccess', function(event, toState) {
-      $scope.currentTab = toState.name.split('.')[0];
+    $scope.setLoadingSubActionBar = function(loadingSubActionBar) {
+      $scope.loadingSubActionBar = loadingSubActionBar;
+    };
+
+    $transitions.onSuccess({}, function(trans) {
+      $scope.currentTab = trans.to().name.split('.')[0];
       if (!$state.includes('reports')) {
-        $scope.selectMode = false;
+        ctrl.setSelectMode(false);
       }
     });
 
@@ -325,14 +434,6 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
     };
     updateAvailableFacilities();
 
-    var findIdInContactHierarchy = function(id, hierarchy) {
-      return _.find(hierarchy, function(entry) {
-        return (
-          entry.doc._id === id || findIdInContactHierarchy(id, entry.children)
-        );
-      });
-    };
-
     Changes({
       key: 'inbox-facilities',
       filter: function(change) {
@@ -340,7 +441,7 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
           return pt !== 'clinic';
         });
         // check if new document is a contact
-        return hierarchyTypes.indexOf(change.doc.type) !== -1;
+        return change.doc && hierarchyTypes.indexOf(change.doc.type) !== -1;
       },
       callback: updateAvailableFacilities,
     });
@@ -537,6 +638,10 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
       });
     });
 
+    $scope.setSubActionBarStatus = function(verified) {
+      $scope.actionBar.right.verified = verified;
+    };
+
     $scope.setRightActionBar = function(model) {
       if (!$scope.actionBar) {
         $scope.actionBar = {};
@@ -566,7 +671,7 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
         model: { doc: doc },
       }).then(function() {
         if (
-          !$scope.selectMode &&
+          !ctrl.selectMode &&
           ($state.includes('contacts') || $state.includes('reports'))
         ) {
           $state.go($state.current.name, { id: null });
@@ -591,7 +696,7 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
     };
 
     $scope.setSelectMode = function(value) {
-      $scope.selectMode = value;
+      ctrl.setSelectMode(value);
       $scope.clearSelected();
       $state.go('reports.detail', { id: null });
     };
@@ -631,6 +736,10 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
       });
     };
 
+    $scope.replicate = function() {
+      DBSync.sync(true);
+    };
+
     CountMessages.init();
 
     // close select2 dropdowns in the background
@@ -640,13 +749,25 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
         // initialised yet
         try {
           $(this).select2('close');
-        } catch (e) {}
+        } catch (e) {
+          // exception thrown on clicking 'close'
+        }
       });
     };
 
     // close all select2 menus on navigation
-    // https://github.com/medic/medic-webapp/issues/2927
-    $rootScope.$on('$stateChangeStart', closeDropdowns);
+    // https://github.com/medic/medic/issues/2927
+    $transitions.onStart({}, closeDropdowns);
+
+    const dbClosedDeregister = $rootScope.$on('databaseClosedEvent', function () {
+      Modal({
+        templateUrl: 'templates/modals/database_closed.html',
+        controller: 'ReloadingModalCtrl',
+        singleton: true,
+      });
+      closeDropdowns();
+    });
+    DatabaseConnectionMonitor.listenForDatabaseClosed();
 
     $rootScope.$on('databaseClosedEvent', function () {
       Modal({
@@ -675,14 +796,30 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
 
     Changes({
       key: 'inbox-translations',
+      filter: change => TranslationLoader.test(change.id),
+      callback: change => $translate.refresh(TranslationLoader.getCode(change.id)),
+    });
+
+    Changes({
+      key: 'inbox-ddoc',
       filter: function(change) {
-        return change.doc.type === 'translations';
+        return (
+          change.id === '_design/medic' ||
+          change.id === '_design/medic-client' ||
+          change.id === 'service-worker-meta' ||
+          change.id === 'settings'
+        );
       },
       callback: function(change) {
-        $translate.refresh(change.doc.code);
+        if (change.id === 'service-worker-meta') {
+          UpdateServiceWorker(showUpdateReady);
+        } else {
+          showUpdateReady();
+        }
       },
     });
 
+<<<<<<< HEAD
     if (window.applicationCache) {
       window.applicationCache.addEventListener('updateready', showUpdateReady);
       window.applicationCache.addEventListener('error', function(err) {
@@ -721,9 +858,17 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
       });
     }
 
+=======
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     RecurringProcessManager.startUpdateRelativeDate();
+    if (Session.isOnlineOnly()) {
+      RecurringProcessManager.startUpdateReadDocsCount();
+    }
     $scope.$on('$destroy', function() {
+      unsubscribe();
+      dbClosedDeregister();
       RecurringProcessManager.stopUpdateRelativeDate();
+      RecurringProcessManager.stopUpdateReadDocsCount();
     });
 
     var userCtx = Session.userCtx();
@@ -731,10 +876,9 @@ const LAST_REPLICATED_SEQ_KEY = require('../bootstrapper/purger').LAST_REPLICATE
       key: 'inbox-user-context',
       filter: function(change) {
         return (
-          change.doc.type === 'user-settings' &&
           userCtx &&
           userCtx.name &&
-          change.doc.name === userCtx.name
+          change.id === `org.couchdb.user:${userCtx.name}`
         );
       },
       callback: function() {

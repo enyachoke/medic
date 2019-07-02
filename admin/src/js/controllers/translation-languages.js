@@ -6,10 +6,12 @@ angular.module('controllers').controller('TranslationLanguagesCtrl',
     $q,
     $scope,
     Blob,
+    Changes,
     DB,
     ExportProperties,
     Modal,
     Settings,
+    TranslationLoader,
     UpdateSettings
   ) {
 
@@ -29,7 +31,7 @@ angular.module('controllers').controller('TranslationLanguagesCtrl',
         };
       }
 
-      result.missing = totalTranslations - Object.keys(doc.values).length;
+      result.missing = totalTranslations - Object.keys(Object.assign(doc.generic, doc.custom || {})).length;
 
       return result;
     };
@@ -43,7 +45,7 @@ angular.module('controllers').controller('TranslationLanguagesCtrl',
 
     var countTotalTranslations = function(rows) {
       var keys = rows.map(function(row) {
-        return row.doc.values ? Object.keys(row.doc.values) : [];
+        return row.doc.custom || row.doc.generic ? Object.keys(Object.assign(row.doc.generic, row.doc.custom || {})) : [];
       });
       keys = _.uniq(_.flatten(keys));
       return keys.length;
@@ -80,6 +82,14 @@ angular.module('controllers').controller('TranslationLanguagesCtrl',
           $log.error('Error loading settings', err);
         });
     };
+
+    const changeListener = Changes({
+      key: 'update-languages',
+      filter: change => TranslationLoader.test(change.id),
+      callback: () => getLanguages()
+    });
+
+    $scope.$on('$destroy', changeListener.unsubscribe);
 
     $scope.editLanguage = function(doc) {
       Modal({

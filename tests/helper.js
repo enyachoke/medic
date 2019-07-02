@@ -3,7 +3,7 @@ const fs = require('fs'),
 
 function writeScreenShot(data, filename) {
   const stream = fs.createWriteStream('./tests/results/' + filename);
-  stream.write(new Buffer(data, 'base64'));
+  stream.write(Buffer.from(data, 'base64'));
   stream.end();
 }
 function handleUpdateModal() {
@@ -206,12 +206,13 @@ module.exports = {
     browser.wait(EC.elementToBeClickable(elm), timeout);
   },
 
-  waitElementToDisappear: locator => {
+  waitElementToDisappear: (locator, timeout) => {
+    timeout = timeout || 15000;
     browser.wait(() => {
       return element(locator)
         .isDisplayed()
         .then(presenceOfElement => !presenceOfElement);
-    }, 10000);
+    }, timeout);
   },
 
   waitElementToPresent: (elm, timeout) => {

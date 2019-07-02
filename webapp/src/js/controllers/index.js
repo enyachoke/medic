@@ -42,6 +42,10 @@
   require('./theme');
   require('./tour-select');
   require('./user-language-modal');
+<<<<<<< HEAD
+=======
+  require('./verify-report-modal');
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
   require('./welcome-modal');
 
 }());

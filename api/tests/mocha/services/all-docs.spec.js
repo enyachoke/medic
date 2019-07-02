@@ -1,5 +1,5 @@
 const service = require('../../../src/services/all-docs');
-const db = require('../../../src/db-pouch');
+const db = require('../../../src/db');
 const sinon = require('sinon').sandbox.create();
 require('chai').should();
 
@@ -28,7 +28,7 @@ describe('All Docs service', () => {
 
   describe('Get Request Ids', () => {
     it('returns request key parameter', () => {
-      query = { key: 'a' };
+      query = { key: '"a"' };
 
       const response = service._getRequestIds(query);
       response.length.should.equal(1);
@@ -281,7 +281,7 @@ describe('All Docs service', () => {
         skip: 'skip',
         endkey: 10,
         end_key_doc_id: 'c',
-        key: 'b',
+        key: '"b"',
         startkey: 2,
         start_key: 3,
         start_key_doc_id: 'a',

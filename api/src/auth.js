@@ -1,28 +1,22 @@
-var request = require('request'),
+var request = require('request-promise-native'),
     url = require('url'),
     _ = require('underscore'),
-    db = require('./db-pouch'),
+    db = require('./db'),
+    environment = require('./environment'),
     config = require('./config'),
     ONLINE_ROLE = 'mm-online';
 
 var get = (path, headers) => {
-  const dbUrl = url.parse(db.serverUrl);
+  const dbUrl = url.parse(environment.serverUrl);
   var fullUrl = url.format({
     protocol: dbUrl.protocol,
     host: dbUrl.host,
     pathname: path
   });
-  return new Promise((resolve, reject) => {
-    request.get({
-      url: fullUrl,
-      headers: headers,
-      json: true
-    }, (err, res, body) => {
-      if (err) {
-        return reject(err);
-      }
-      resolve(body);
-    });
+  return request.get({
+    url: fullUrl,
+    headers: headers,
+    json: true
   });
 };
 
@@ -34,11 +28,11 @@ var hasRole = (userCtx, role) => {
 var isDbAdmin = userCtx => hasRole(userCtx, '_admin');
 
 var hasPermission = (userCtx, permission) => {
-  var perm = _.findWhere(config.get('permissions'), { name: permission });
-  if (!perm) {
+  var roles = config.get('permissions')[permission];
+  if (!roles) {
     return false;
   }
-  return _.some(perm.roles, role => _.contains(userCtx.roles, role));
+  return _.some(roles, role => _.contains(userCtx.roles, role));
 };
 
 var checkDistrict = (requested, permitted) => {
@@ -89,6 +83,7 @@ module.exports = {
       })
       .then(auth => {
         if (auth && auth.userCtx && auth.userCtx.name) {
+          req.headers['X-Medic-User'] = auth.userCtx.name;
           return auth.userCtx;
         }
         throw { code: 401, message: 'Not logged in' };
@@ -113,26 +108,22 @@ module.exports = {
       });
   },
 
-  checkUrl: (req, callback) => {
+  checkUrl: req => {
     if (!req.params || !req.params.path) {
-      return callback(new Error('No path given'));
+      return Promise.reject(new Error('No path given'));
     }
-    const dbUrl = url.parse(db.serverUrl);
-    var fullUrl = url.format({
+    const dbUrl = url.parse(environment.serverUrl);
+    const fullUrl = url.format({
       protocol: dbUrl.protocol,
       host: dbUrl.host,
       pathname: req.params.path
     });
-    request.head({
+    return request.head({
       url: fullUrl,
       headers: req.headers,
-      json: true
-    }, (err, res) => {
-      if (err) {
-        return callback(err);
-      }
-      callback(null, res && { status: res.statusCode } );
-    });
+      resolveWithFullResponse: true
+    })
+      .then(res => res && res.statusCode);
   },
 
   /**
@@ -149,7 +140,7 @@ module.exports = {
 
     let username, password;
     try {
-      [username, password] = new Buffer(authHeader.split(' ')[1], 'base64').toString().split(':');
+      [username, password] = Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
     } catch (err) {
       throw Error('Corrupted Auth header');
     }
@@ -164,25 +155,22 @@ module.exports = {
    * Validates given Basic Auth credentials against the server
    *
    * @param      {Object}    Credentials object as created by basicAuthCredentials
-   * @param      {Function}  callback    returns the validated username or an
-   *                                     error if there was a problem
    */
-  validateBasicAuth: ({username, password}, callback) => {
+  validateBasicAuth: ({ username, password }) => {
     const authUrl = url.parse(process.env.COUCH_URL);
     delete authUrl.pathname;
     authUrl.auth = `${username}:${password}`;
 
-    request({ uri: url.format(authUrl), method: 'HEAD'}, (err, res) => {
-      if (err) {
-        return callback(err);
-      }
-
-      if (res.statusCode !== 200) {
-        return callback(Error(`Expected 200 got ${res.statusCode}`));
-      }
-
-      callback(null, username);
-    });
+    return request.head({
+      uri: url.format(authUrl),
+      resolveWithFullResponse: true
+    })
+      .then(res => {
+        if (res.statusCode !== 200) {
+          return Promise.reject(new Error(`Expected 200 got ${res.statusCode}`));
+        }
+        return username;
+      });
   },
 
   getUserSettings: userCtx => {

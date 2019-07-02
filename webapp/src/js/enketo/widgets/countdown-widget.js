@@ -53,16 +53,14 @@ define( function( require, exports, module ) {
 
     Timerwidget.prototype._init = function() {
         var $el = $( this.element );
+        var $label = $el.parent();
 
-        // replace the element with a canvas
         var canvas = $('<canvas width="%s" height="%s">'.replace(/%s/g, DIM));
-        $el.replaceWith(canvas);
+        $label.append(canvas);
         new TimerAnimation(canvas[0], DIM, DIM, parseInt($el.val()) || DEFAULT_TIME);
     };
 
-    Timerwidget.prototype.destroy = function( element ) {
-        /* jshint unused:false */
-    };
+    Timerwidget.prototype.destroy = function( element ) {};  // eslint-disable-line no-unused-vars
 
     $.fn[ pluginName ] = function( options, event ) {
         return this.each( function() {
@@ -109,7 +107,7 @@ function TimerAnimation(canvas, canvasW, canvasH, duration) {
         }
 
         function loadSound() {
-            return new Audio('./static/audio/alert.mp3');
+            return new Audio('/audio/alert.mp3');
         }
 
         return {

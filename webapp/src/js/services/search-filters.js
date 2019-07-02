@@ -5,12 +5,14 @@ var _ = require('underscore'),
 
   'use strict';
 
-  var inboxServices = angular.module('inboxServices');
-
   var ENTER_KEY_CODE = 13;
 
-  inboxServices.factory('SearchFilters', ['$translate',
-    function($translate) {
+  angular.module('inboxServices').factory('SearchFilters',
+    function(
+      $timeout,
+      $translate
+    ) {
+      'ngInject';
 
       var isEnter = function(e) {
         return e.which === ENTER_KEY_CODE;
@@ -189,7 +191,7 @@ var _ = require('underscore'),
           });
         })
         .on('show.daterangepicker', function(e, picker) {
-          setTimeout(function() {
+          $timeout(function() {
             if ($('#dateRangeDropdown').is('.disabled')) {
               picker.hide();
             }
@@ -218,9 +220,12 @@ var _ = require('underscore'),
           $('.filter.multidropdown:not(.no-reset)').each(function() {
             $(this).multiDropdown().reset();
           });
+        },
+        destroy: function() {
+          $('#date-filter').data('daterangepicker').remove();
         }
       };
     }
-  ]);
+  );
 
 }());

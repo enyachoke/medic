@@ -1,13 +1,12 @@
 var _ = require('underscore'),
     format = require('../modules/format'),
-    phoneNumber = require('phone-number');
+    phoneNumber = require('@medic/phone-number');
 
 angular.module('inboxServices').factory('Select2Search',
   function(
     $log,
     $q,
     $translate,
-    DB,
     ContactMuted,
     LineageModelGenerator,
     Search,
@@ -75,9 +74,10 @@ angular.module('inboxServices').factory('Select2Search',
           types: { selected: types },
           search: params.data.q
         };
-        var options = {
+        const options = {
           limit: pageSize,
-          skip: skip
+          skip,
+          hydrateContactNames: true,
         };
 
         Search('contacts', filters, options)

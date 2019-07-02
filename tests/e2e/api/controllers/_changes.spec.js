@@ -8,9 +8,11 @@ const _ = require('underscore'),
       semver = require('semver');
 
 const DEFAULT_EXPECTED = [
-  'appcache',
+  'service-worker-meta',
   'settings',
   'resources',
+  'branding',
+  'partners',
   '_design/medic-client'
 ];
 
@@ -189,7 +191,11 @@ const batchedChanges = (username, limit, results = [], lastSeq = 0) => {
   });
 };
 
+<<<<<<< HEAD
 const getChangesForIds = (username, docIds, lastSeq = 0, limit = 100, results = []) => {
+=======
+const getChangesForIds = (username, docIds, retry = false, lastSeq = 0, limit = 100, results = []) => {
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
   return requestChanges(username, { since: lastSeq, limit }).then(changes => {
     changes.results.forEach(change => {
       if (docIds.includes(change.id)) {
@@ -197,11 +203,19 @@ const getChangesForIds = (username, docIds, lastSeq = 0, limit = 100, results = 
       }
     });
 
+<<<<<<< HEAD
     // simulate PouchDB seq selection
     const last_seq = changes.results.length ? changes.results[changes.results.length - 1].seq : changes.last_seq;
 
     if (docIds.find(id => !results.find(change => change.id === id)) || changes.results.length) {
       return getChangesForIds(username, docIds, last_seq, limit, results);
+=======
+    // simulate PouchDB 7.0.0 seq selection
+    const last_seq = changes.results.length ? changes.results[changes.results.length - 1].seq : changes.last_seq;
+
+    if (docIds.find(id => !results.find(change => change.id === id)) || (retry && changes.results.length)) {
+      return getChangesForIds(username, docIds, retry, last_seq, limit, results);
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     }
 
     return results;
@@ -536,6 +550,7 @@ describe('changes handler', () => {
         });
     });
 
+<<<<<<< HEAD
     it('normal feeds should replicate correctly when new changes are pushed', () => {
       const allowedDocs = createSomeContacts(25, 'fixture:bobville'),
             allowedDocs2 = createSomeContacts(25, 'fixture:bobville');
@@ -559,6 +574,8 @@ describe('changes handler', () => {
         });
     });
 
+=======
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     it('filters allowed changes in longpolls', () => {
       const allowedDocs = createSomeContacts(3, 'fixture:bobville');
       const deniedDocs = createSomeContacts(3, 'irrelevant-place');
@@ -924,6 +941,17 @@ describe('changes handler', () => {
        });
     });
 
+    it('should forward changes requests when db name is not medic', () => {
+      return utils
+        .requestOnMedicDb(_.defaults({ path: '/_changes' }, { auth: `bob:${password}` }))
+        .then(results => {
+          return assertChangeIds(results,
+            'org.couchdb.user:bob',
+            'fixture:bobville',
+            'fixture:user:bob');
+      });
+    });
+
     it('filters calls with irregular urls which match couchdb endpoint', () => {
       const options = {
         auth: `bob:${password}`,
@@ -943,7 +971,19 @@ describe('changes handler', () => {
             .catch(err => err),
           utils
             .request(_.defaults({ path: `//${constants.DB_NAME}//_changes//dsadada` }, options))
-            .catch(err => err)
+            .catch(err => err),
+          utils.requestOnMedicDb(_.defaults({ path: '/_changes' }, options)),
+          utils.requestOnMedicDb(_.defaults({ path: '//_changes//' }, options)),
+          utils.request(_.defaults({ path: `//medic//_changes` }, options)),
+          utils
+            .requestOnMedicDb(_.defaults({ path: '/_changes/dsad' }, options))
+            .catch(err => err),
+          utils
+            .requestOnMedicDb(_.defaults({ path: '//_changes//dsada' }, options))
+            .catch(err => err),
+          utils
+            .request(_.defaults({ path: `//medic//_changes//dsadada` }, options))
+            .catch(err => err),
         ])
         .then(results => {
           results.forEach(result => {
@@ -964,6 +1004,88 @@ describe('changes handler', () => {
         .catch(err => {
           expect(err).toBeTruthy();
           expect(err.message.includes('Error processing your changes')).toEqual(true);
+        });
+    });
+
+    it('should return the tombstone of a deleted doc', () => {
+      const contact = createSomeContacts(1, 'fixture:bobville')[0];
+
+      return utils.saveDoc(contact)
+        .then(result => {
+          contact._rev = result.rev;
+          contact._deleted = true;
+
+          return utils.saveDoc(contact);
+        })
+        .then(result => {
+          contact._rev = result.rev;
+          return getChangesForIds('bob', [contact._id], false, currentSeq);
+        })
+        .then(changes => {
+          expect(changes.length).toEqual(1);
+          expect(changes[0].id).toEqual(contact._id);
+          expect(changes[0].deleted).toEqual(true);
+          expect(changes[0].changes[0].rev).toEqual(contact._rev);
+        });
+    });
+
+    it('should not return tombstone of a deleted doc if doc is re-added', () => {
+      const contact = createSomeContacts(1, 'fixture:bobville')[0];
+
+      return utils.saveDoc(contact)
+        .then(result => {
+          contact._rev = result.rev;
+          contact._deleted = true;
+
+          return utils.saveDoc(contact);
+        })
+        .then(result => {
+          contact._rev = result.rev;
+          return getChangesForIds('bob', [contact._id], false, currentSeq);
+        })
+        .then(changes => {
+          expect(changes.length).toEqual(1);
+          expect(changes[0].id).toEqual(contact._id);
+          expect(changes[0].deleted).toEqual(true);
+          expect(changes[0].changes[0].rev).toEqual(contact._rev);
+
+          delete(contact._rev);
+          delete(contact._deleted);
+          return utils.saveDoc(contact);
+        })
+        .then(result => {
+          contact._rev = result.rev;
+
+          return getChangesForIds('bob', [contact._id], false, currentSeq);
+        })
+        .then(changes => {
+          expect(changes.length).toEqual(1);
+          expect(changes[0].id).toEqual(contact._id);
+          expect(changes[0].deleted).toEqual(undefined);
+          expect(changes[0].changes[0].rev).toEqual(contact._rev);
+        });
+    });
+
+    it('normal feeds should replicate correctly when new changes are pushed', () => {
+      const allowedDocs = createSomeContacts(25, 'fixture:bobville'),
+            allowedDocs2 = createSomeContacts(25, 'fixture:bobville');
+
+      const ids = _.pluck(allowedDocs, '_id');
+      ids.push(..._.pluck(allowedDocs2, '_id'));
+
+      const promise = allowedDocs.reduce((promise, doc) => {
+        return promise.then(() => utils.saveDoc(doc));
+      }, Promise.resolve());
+
+      return utils
+        .saveDocs(allowedDocs2)
+        .then(() => Promise.all([
+          getChangesForIds('bob', ids, true, currentSeq, 4),
+          promise
+        ]))
+        .then(([ changes ]) => {
+          expect(ids.every(id => changes.find(change => change.id === id))).toBe(true);
+          expect(changes.some(change => !change.seq)).toBe(false);
         });
     });
   });

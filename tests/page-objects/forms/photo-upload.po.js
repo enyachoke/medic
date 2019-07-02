@@ -38,14 +38,14 @@ const docs = [
     _attachments: {
       xml: {
         content_type: 'application/octet-stream',
-        data: new Buffer(xml).toString('base64')
+        data: Buffer.from(xml).toString('base64')
       }
     }
   }];
 
 module.exports = {
-  configureForm: (contactId, done) => {
-    utils.seedTestData(done, contactId, docs);
+  configureForm: (userContactDoc, done) => {
+    utils.seedTestData(done, userContactDoc, docs);
   },
 
   submit: () => {

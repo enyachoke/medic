@@ -1,6 +1,11 @@
 angular
   .module('controllers')
-  .controller('ExportFeedbackCtrl', function($log, $scope, DB, Export) {
+  .controller('ExportFeedbackCtrl', function(
+    $log,
+    $scope,
+    DB,
+    Export
+  ) {
     'use strict';
     'ngInject';
 
@@ -42,9 +47,11 @@ angular
       return result;
     };
 
-    DB()
-      .query('medic-admin/feedback', {
-        include_docs: true,
+    DB({ usersMeta: true })
+      .allDocs({
+        include_docs: true, 
+        endkey: 'feedback-', 
+        startkey: 'feedback-\ufff0',
         descending: true,
         limit: 20,
       })
@@ -56,9 +63,6 @@ angular
       });
 
     $scope.export = function() {
-      $scope.exporting = true;
-      Export({}, 'feedback').then(function() {
-        $scope.exporting = false;
-      });
+      Export('feedback');
     };
   });

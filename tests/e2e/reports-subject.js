@@ -276,7 +276,7 @@ describe('Reports Summary', () => {
       .then(() => protractor.promise.all(CONTACTS.map(utils.saveDoc)))
       .then(() => {
         //wait till change feed receives all the contacts we created
-        setTimeout(done, 2000);
+        setTimeout(done, 5000);
       })
       .catch(done.fail);
   });
@@ -285,7 +285,7 @@ describe('Reports Summary', () => {
 
   afterEach((done) => {
     utils
-      .deleteAllDocs(CONTACTS.map(contact => contact._id))
+      .deleteAllDocs(CONTACTS.map(contact => contact._id)) // deletes all except these docs
       .then(done);
   });
 

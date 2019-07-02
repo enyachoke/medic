@@ -1,6 +1,3 @@
-/**
- * TEST DISABLED FOR FLAKINESS
- * @see https://github.com/medic/medic-webapp/issues/4932
 const utils = require('../utils'),
       commonElements = require('../page-objects/common/common.po.js'),
       helper = require('../helper'),
@@ -265,11 +262,11 @@ describe('registration transition', () => {
     const checkAutoResponse = () => {
       const taskElement = element(by.css('#reports-content .details > ul'));
       expect(taskElement.element(by.css('.task-list > li:nth-child(1) > ul > li')).getText()).toBe('Thank you '+ CAROL.name +' for registering Siobhan');
-      expect(taskElement.element(by.css('.task-list > li:nth-child(1) .task-state .state.pending')).isDisplayed()).toBeTruthy();
+      expect(taskElement.element(by.css('.task-list > li:nth-child(1) .task-state .state.forwarded-to-gateway')).isDisplayed()).toBeTruthy();
       expect(taskElement.element(by.css('.task-list > li:nth-child(1) .task-state .recipient')).getText()).toBe(' to +64271234567');
 
       expect(taskElement.element(by.css('.task-list > li:nth-child(2) > ul > li')).getText()).toBe('LMP ' + expected_date.locale('sw').format('ddd, MMM Do, YYYY'));
-      expect(taskElement.element(by.css('.task-list > li:nth-child(2) .task-state .state.pending')).isDisplayed()).toBeTruthy();
+      expect(taskElement.element(by.css('.task-list > li:nth-child(2) .task-state .state.forwarded-to-gateway')).isDisplayed()).toBeTruthy();
       expect(taskElement.element(by.css('.task-list > li:nth-child(2) .task-state .recipient')).getText()).toBe(' to +64271234567');
     };
 
@@ -282,7 +279,7 @@ describe('registration transition', () => {
     };
 
     it('shows content', () => {
-      commonElements.goToReports();
+      commonElements.goToReports(true);
       helper.waitElementToBeClickable(element(by.css('#reports-list .unfiltered li:first-child')));
       browser.wait(() => element(by.cssContainingText('#reports-list .unfiltered li:first-child h4 span', 'Siobhan')).isPresent(), 10000);
       helper.clickElement(element(by.css('#reports-list .unfiltered li:first-child .summary')));
@@ -299,4 +296,3 @@ describe('registration transition', () => {
 
   });
 });
-*/

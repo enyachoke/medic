@@ -1,6 +1,12 @@
 function (doc) {
+  if (doc.type === 'tombstone' && doc.tombstone) {
+    doc = doc.tombstone;
+  }
+
   if (doc._id === 'resources' ||
-      doc._id === 'appcache' ||
+      doc._id === 'branding' ||
+      doc._id === 'partners' ||
+      doc._id === 'service-worker-meta' ||
       doc._id === 'zscore-charts' ||
       doc._id === 'settings' ||
       doc.type === 'form' ||
@@ -8,17 +14,14 @@ function (doc) {
     return emit('_all', {});
   }
 
-  if (doc.type === 'tombstone' && doc.tombstone) {
-    doc = doc.tombstone;
-  }
-
   var getSubject = function() {
     if (doc.form) {
       // report
       if (doc.contact && doc.errors && doc.errors.length) {
         for (var i = 0; i < doc.errors.length; i++) {
-          // no patient found, fall back to using contact. #3437
-          if (doc.errors[i].code === 'registration_not_found') {
+          // invalid or no patient found, fall back to using contact. #3437
+          if (doc.errors[i].code === 'registration_not_found' ||
+              doc.errors[i].code === 'invalid_patient_id') {
             return doc.contact._id;
           }
         }

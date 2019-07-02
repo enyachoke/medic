@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 const utils = require('./utils');
+=======
+const utils = require('./utils'),
+      registrationUtils = require('@medic/registration-utils');
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
 
 const LAST_PURGED_DATE_KEY = 'medic-last-purge-date';
 const LAST_REPLICATED_SEQ_KEY = 'medic-last-replicated-seq';
@@ -15,6 +20,7 @@ const hash = str => {
         return hash;
     }
 
+<<<<<<< HEAD
     /* jshint ignore:start */
     for (let i = 0; i < str.length; i++) {
         const char = str.charCodeAt(i);
@@ -22,6 +28,15 @@ const hash = str => {
         hash = hash & hash; // Convert to 32bit integer
     }
     /* jshint ignore:end */
+=======
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        /* eslint-disable no-bitwise */
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+        /* eslint-enable no-bitwise */
+    }
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
 
     return hash;
 };
@@ -181,6 +196,7 @@ module.exports = function(DB, userCtx, initialReplication) {
     }
   };
 
+<<<<<<< HEAD
   // Copied and slightly modified from the rules-service:
   // https://github.com/medic/medic-webapp/blob/master/webapp/src/js/services/rules-engine.js#L52-L67
   // We want to be consistent with rules
@@ -198,6 +214,14 @@ module.exports = function(DB, userCtx, initialReplication) {
       contact.patient_id === id ||
       contact.place_id === id
     );
+=======
+  var getContactId = function(doc) {
+    // get the associated patient or place id to group reports by
+    return registrationUtils.getPatientId(doc);
+  };
+  var contactHasId = function(contact, id) {
+    return registrationUtils.getSubjectIds(contact).includes(id);
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
   };
 
   const reportsByContact = () => {

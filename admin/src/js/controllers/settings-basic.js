@@ -1,4 +1,4 @@
-var phoneNumber = require('phone-number'),
+var phoneNumber = require('@medic/phone-number'),
     countries = require('../modules/countries');
 
 angular.module('controllers').controller('SettingsBasicCtrl',
@@ -7,61 +7,35 @@ angular.module('controllers').controller('SettingsBasicCtrl',
     $scope,
     $timeout,
     $translate,
-    Settings,
     Languages,
+    Settings,
     UpdateSettings
   ) {
 
     'use strict';
     'ngInject';
 
-    var validateCountryCode = function() {
-      var countryCode = $('#default-country-code').val();
-
-      // required field
-      if (!countryCode) {
-        var countryCodeField = $translate.instant('Default country code');
-        $scope.basicSettingsModel.error.default_country_code = $translate.instant(
-          'field is required', { field: countryCodeField }
-        );
-        return false;
-      }
-
-      return true;
-    };
-
     var validateGatewayNumber = function() {
       var gatewayNumber = $scope.basicSettingsModel.gateway_number;
 
-      // required field
-      if (!gatewayNumber) {
-        var gatewayNumberField = $translate.instant('Gateway number');
-        $scope.basicSettingsModel.error.gateway_number = $translate.instant(
-          'field is required', { field: gatewayNumberField }
-        );
-        return false;
-      }
+      if (gatewayNumber) {
+        // must be a valid phone number
+        var info = { default_country_code: $('#default-country-code').val() };
+        if (!phoneNumber.validate(info, gatewayNumber)) {
+          $scope.basicSettingsModel.error.gateway_number = $translate.instant('Phone number not valid');
+          return false;
+        }
 
-      // must be a valid phone number
-      var info = { default_country_code: $('#default-country-code').val() };
-      if (!phoneNumber.validate(info, gatewayNumber)) {
-        $scope.basicSettingsModel.error.gateway_number = $translate.instant('Phone number not valid');
-        return false;
+        // normalise value
+        $scope.basicSettingsModel.gateway_number = phoneNumber.normalize(info, gatewayNumber);
       }
-
-      // normalise value
-      $scope.basicSettingsModel.gateway_number = phoneNumber.normalize(info, gatewayNumber);
 
       return true;
-    };
-
-    var validate = function() {
-      return validateCountryCode() && validateGatewayNumber();
     };
 
     $scope.submitBasicSettings = function() {
       $scope.basicSettingsModel.error = {};
-      if (validate()) {
+      if (validateGatewayNumber()) {
         $scope.status = { loading: true };
         var settings = {
           locale: $scope.basicSettingsModel.locale,

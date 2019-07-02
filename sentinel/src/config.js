@@ -1,6 +1,7 @@
 const _ = require('underscore'),
-  db = require('./db-pouch'),
+  db = require('./db'),
   logger = require('./lib/logger'),
+  translationUtils = require('@medic/translation-utils'),
   translations = {};
 
 const DEFAULT_CONFIG = {
@@ -13,7 +14,8 @@ const DEFAULT_CONFIG = {
   loglevel: 'info',
 };
 
-let config = DEFAULT_CONFIG;
+let config = DEFAULT_CONFIG,
+    transitionsLib;
 
 const loadTranslations = () => {
   const options = {
@@ -24,7 +26,10 @@ const loadTranslations = () => {
   return db.medic
     .query('medic-client/doc_by_type', options)
     .then(result => {
-      result.rows.forEach(row => (translations[row.doc.code] = row.doc.values));
+      result.rows.forEach(row => {
+        const values = Object.assign(row.doc.generic, row.doc.custom || {});
+        translations[row.doc.code] = translationUtils.loadTranslations(values);
+      });
     })
     .catch(err => {
       logger.error('Error loading translations - starting up anyway: %o', err);
@@ -40,7 +45,7 @@ const initFeed = () => {
         initConfig();
       } else if (change.id.startsWith('messages-')) {
         logger.info('Detected translations change - reloading');
-        loadTranslations();
+        loadTranslations().then(() => initTransitionLib());
       }
     })
     .on('error', err => {
@@ -62,12 +67,17 @@ const initConfig = () => {
         config.schedule_evening_hours,
         config.schedule_evening_minutes
       );
+      initTransitionLib();
       require('./transitions').loadTransitions();
     })
     .catch(err => {
       logger.error('%o', err);
       throw new Error('Error loading configuration');
     });
+};
+
+const initTransitionLib = () => {
+  transitionsLib = require('@medic/transitions')(db, config, translations, logger);
 };
 
 module.exports = {
@@ -84,4 +94,6 @@ module.exports = {
     initFeed();
     return loadTranslations().then(initConfig);
   },
+  initTransitionLib: initTransitionLib,
+  getTransitionsLib: () => transitionsLib
 };

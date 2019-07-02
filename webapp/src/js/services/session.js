@@ -6,44 +6,38 @@ var COOKIE_NAME = 'userCtx',
 
   'use strict';
 
-  var inboxServices = angular.module('inboxServices');
-
-  inboxServices.factory('Session',
+  angular.module('inboxServices').factory('Session',
     function(
       $http,
       $log,
       $window,
-      ipCookie,
-      Location
+      Location,
+      ipCookie
     ) {
 
       'ngInject';
 
+      let userCtxCookieValue;
       var getUserCtx = function() {
-        return ipCookie(COOKIE_NAME);
-      };
-
-      var waitForAppCache = function(callback) {
-        var appCache = $window.applicationCache;
-        if (appCache && appCache.status === appCache.DOWNLOADING) {
-          return appCache.addEventListener('updateready', callback);
+        if (!userCtxCookieValue) {
+          userCtxCookieValue = ipCookie(COOKIE_NAME);
         }
-        callback();
+
+        return userCtxCookieValue;
       };
 
       var navigateToLogin = function() {
         $log.warn('User must reauthenticate');
         ipCookie.remove(COOKIE_NAME, { path: '/' });
-        waitForAppCache(function() {
-          $window.location.href = '/' + Location.dbName + '/login' +
-            '?redirect=' + encodeURIComponent($window.location.href);
-        });
+        userCtxCookieValue = undefined;
+        $window.location.href = `/${Location.dbName}/login?redirect=${encodeURIComponent($window.location.href)}`;
       };
 
       var logout = function() {
         $http.delete('/_session')
           .catch(function() {
-            // Ignore exception. User can already be logged out.
+            // Set cookie to force login before using app
+            ipCookie('login', 'force', { path: '/' });
           })
           .then(navigateToLogin);
       };

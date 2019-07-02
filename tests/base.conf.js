@@ -1,11 +1,15 @@
-const utils = require('./utils'),
-      constants = require('./constants'),
-      auth = require('./auth')();
-const serviceManager = require('./service-manager');
-
+const fs = require('fs');
+const utils = require('./utils');
+const constants = require('./constants');
+const auth = require('./auth')();
+const browserLogStream = fs.createWriteStream(__dirname + '/../tests/logs/browser.console.log');
 
 class BaseConfig {
-  constructor(testSrcDir, options={}) {
+  constructor(testSrcDir, { headless=true }={}) {
+    const chromeArgs = [ '--window-size=1024,768' ];
+    if (headless) {
+      chromeArgs.push('--headless', '--disable-gpu');
+    }
     this.config = {
       seleniumAddress: 'http://localhost:4444/wd/hub',
 
@@ -15,10 +19,8 @@ class BaseConfig {
       capabilities: {
         browserName: 'chrome',
         chromeOptions: {
-          args: ['--headless', '--disable-gpu', '--window-size=1024,768']
+          args: chromeArgs
         }
-        // browserName: 'firefox',
-        // 'marionette':'true'
       },
       beforeLaunch: function() {
         process.on('uncaughtException', function() {
@@ -29,31 +31,57 @@ class BaseConfig {
           utils.reporter.beforeLaunch(resolve);
         });
       },
+      afterLaunch: function(exitCode) {
+        return new Promise(function(resolve) {
+          utils.reporter.afterLaunch(resolve.bind(this, exitCode));
+        });
+      },
       onPrepare: () => {
         jasmine.getEnv().addReporter(utils.reporter);
         browser.waitForAngularEnabled(false);
 
-        if(options.manageServices) {
-          browser.driver.wait(serviceManager.startAll(), 60 * 1000, 'API and Sentinel should start within 60 seconds');
-          browser.driver.sleep(1); // block until previous command has completed
-        }
+        browser.driver.wait(startApi(), 135 * 1000, 'API took too long to start up');
+        browser.driver.sleep(10000); // wait for startup to complete
 
-        browser.driver.wait(setupSettings, 5 * 1000, 'Settings should be setup within 5 seconds');
-        browser.driver.wait(setupUser, 5 * 1000, 'User should be setup within 5 seconds');
-        browser.driver.sleep(1); // block until previous command has completed
+        afterEach(() => {
+          browser.manage().logs().get('browser').then(logs => {
+            logs
+              .map(log => `[${log.level.name_}] ${log.message}\n`)
+              .forEach(log => browserLogStream.write(log));
+            browserLogStream.write('\n~~~~~~~~~~~~~~~~~~~~~\n\n');
+          });
+        });
 
         return login(browser);
       },
     };
-
-    if(options.manageServices) {
-      this.onCleanUp = serviceManager.stopAll;
-    }
   }
 }
 
 module.exports = BaseConfig;
 
+const runAndLog = (msg, func) => {
+  console.log(`API startup: ${msg}`);
+  return func();
+};
+
+const startApi = () => listenForApi()
+  .then(() => runAndLog('Settings setup', setupSettings))
+  .then(() => runAndLog('User contact doc setup', utils.setUserContactDoc))
+  .then(() => runAndLog('User setup', setupUser));
+
+const listenForApi = () => {
+  console.log('Checking API');
+  return utils.request({ path: '/api/info' })
+    .catch(() => {
+      console.log('API check failed, trying again in 5 seconds');
+      return new Promise(resolve => {
+        setTimeout(() => {
+          resolve(listenForApi());
+        }, 5000);
+      });
+    });
+};
 
 const getLoginUrl = () => {
   const redirectUrl = encodeURIComponent(`/${constants.DB_NAME}/_design/${constants.MAIN_DDOC_NAME}/_rewrite/#/messages`);
@@ -82,6 +110,7 @@ const setupSettings = () => {
 const setupUser = () => {
   return utils.getDoc('org.couchdb.user:' + auth.user)
     .then(doc => {
+      doc.contact_id = constants.USER_CONTACT_ID;
       doc.known = true;
       doc.language = 'en';
       doc.roles = ['_admin'];

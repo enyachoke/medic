@@ -41,10 +41,12 @@ describe('DB service', () => {
       } );
       $provide.value('Location', Location);
     });
-    inject($injector => {
+    inject(($injector, $timeout) => {
       getService = () => {
         // delay initialisation of the db service
-        return $injector.get('DB');
+        const service = $injector.get('DB');
+        $timeout.flush(1000);
+        return service;
       };
     });
   });
@@ -63,6 +65,7 @@ describe('DB service', () => {
 
       // init
       const service = getService();
+
       chai.expect(pouchDB.callCount).to.equal(2);
       chai.expect(pouchDB.args[0][0]).to.equal('medicdb-user-johnny');
       chai.expect(pouchDB.args[1][0]).to.equal('medicdb-user-johnny-meta');
@@ -89,6 +92,7 @@ describe('DB service', () => {
 
       // init
       const service = getService();
+
       chai.expect(pouchDB.callCount).to.equal(2);
       chai.expect(pouchDB.args[0][0]).to.equal('medicdb-user-johnny');
       chai.expect(pouchDB.args[1][0]).to.equal('medicdb-user-johnny-meta');
@@ -116,6 +120,7 @@ describe('DB service', () => {
 
       // init
       const service = getService();
+
       chai.expect(pouchDB.callCount).to.equal(2);
       chai.expect(pouchDB.args[0][0]).to.equal('medicdb-user-johnny.<>^,?!');
       chai.expect(pouchDB.args[1][0]).to.equal('medicdb-user-johnny.<>^,?!-meta');
@@ -142,6 +147,7 @@ describe('DB service', () => {
 
       // init
       const service = getService();
+
       chai.expect(pouchDB.callCount).to.equal(2);
       chai.expect(expected.viewCleanup.callCount).to.equal(2);
 

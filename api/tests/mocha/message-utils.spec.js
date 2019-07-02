@@ -1,7 +1,7 @@
 const chai = require('chai'),
       sinon = require('sinon'),
-      taskUtils = require('task-utils'),
-      db = require('../../src/db-pouch'),
+      taskUtils = require('@medic/task-utils'),
+      db = require('../../src/db'),
       controller = require('../../src/message-utils');
 
 describe('message utils', () => {

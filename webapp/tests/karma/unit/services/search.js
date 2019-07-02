@@ -46,6 +46,10 @@ describe('Search service', function() {
         return searchStub;
       });
       $provide.value('Session', session);
+<<<<<<< HEAD
+=======
+      $provide.value('Telemetry', { record: () => Promise.resolve() });
+>>>>>>> 4e139626073cbda5df71756ece2ed5edf71b4c41
     });
     inject(function($injector) {
       service = $injector.get('Search');
@@ -89,7 +93,7 @@ describe('Search service', function() {
         });
     });
 
-    it('does not debounce different queries - medic/medic-webapp/issues/4331)', function() {
+    it('does not debounce different queries - medic/medic/issues/4331)', function() {
       GetDataRecords
         .onFirstCall().returns(Promise.resolve([ { id: 'a' } ]))
         .onSecondCall().returns(Promise.resolve([ { id: 'b' } ]));

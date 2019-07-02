@@ -1,8 +1,8 @@
 const _ = require('underscore'),
       people = require('./people'),
       utils = require('./utils'),
-      db = require('../db-pouch'),
-      lineage = require('lineage')(Promise, db.medic),
+      db = require('../db'),
+      lineage = require('@medic/lineage')(Promise, db.medic),
       PLACE_EDITABLE_FIELDS = ['name', 'parent', 'contact', 'place_id'],
       PLACE_TYPES = ['national_office', 'district_hospital', 'health_center', 'clinic'];
 
@@ -10,12 +10,12 @@ const getPlace = id => {
   return lineage.fetchHydratedDoc(id)
     .then(doc => {
       if (!isAPlace(doc)) {
-        return Promise.reject({ statusCode: 404 });
+        return Promise.reject({ status: 404 });
       }
       return doc;
     })
     .catch(err => {
-      if (err.statusCode === 404) {
+      if (err.status === 404) {
         err.message  = 'Failed to find place.';
       }
       throw err;
@@ -211,4 +211,3 @@ module.exports = {
   updatePlace: updatePlace,
   getOrCreatePlace: getOrCreatePlace,
 };
-

@@ -27,9 +27,14 @@
       })
       .state('messages.detail', {
         url: '/{type}:{id}',
+        params: {
+          type: null,
+          id: null
+        },
         views: {
           content: {
             controller: 'MessagesContentCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/messages_content.html'
           }
         }
@@ -43,27 +48,39 @@
       })
       .state('reports.add', {
         url: '/add/:formId',
+        params: {
+          formId: null
+        },
         views: {
           content: {
             controller: 'ReportsAddCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/reports_add.html'
           }
         }
       })
       .state('reports.edit', {
         url: '/edit/:reportId',
+        params: {
+          reportId: null
+        },
         views: {
           content: {
             controller: 'ReportsAddCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/reports_add.html'
           }
         }
       })
       .state('reports.detail', {
         url: '/:id',
+        params: {
+          id: null
+        },
         views: {
           content: {
             controller: 'ReportsContentCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/reports_content.html'
           }
         }
@@ -86,6 +103,10 @@
       })
       .state('analytics.reporting.detail', {
         url: '/:form/:place',
+        params: {
+          form: null,
+          place: null
+        },
         views: {
           detail: {
             controller: 'AnalyticsReportingDetailCtrl',
@@ -114,51 +135,74 @@
         views: {
           content: {
             controller: 'ContactsEditCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/contacts_edit.html'
           }
         }
       })
       .state('contacts.report', {
         url: '/:id/report/:formId',
+        params: {
+          id: null,
+          formId: null
+        },
         views: {
           content: {
             controller: 'ContactsReportCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/contacts_report.html'
           }
         }
       })
       .state('contacts.deceased', {
         url: '/:id/deceased',
+        params: {
+          id: null
+        },
         views: {
           content: {
             controller: 'ContactsDeceasedCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/contacts_deceased.html'
           }
         }
       })
       .state('contacts.detail', {
         url: '/:id',
+        params: {
+          id: null
+        },
         views: {
           content: {
             controller: 'ContactsContentCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/contacts_content.html'
           }
         }
       })
       .state('contacts.addChild', {
         url: '/:parent_id/add/:type?from',
+        params: {
+          parent_id: null,
+          type: null
+        },
         views: {
           content: {
             controller: 'ContactsEditCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/contacts_edit.html'
           }
         }
       })
       .state('contacts.edit', {
         url: '/:id/edit',
+        params: {
+          id: null
+        },
         views: {
           content: {
             controller: 'ContactsEditCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/contacts_edit.html'
           }
         }
@@ -172,9 +216,13 @@
       })
       .state('tasks.detail', {
         url: '/:id',
+        params: {
+          id: null
+        },
         views: {
           content: {
             controller: 'TasksContentCtrl',
+            controllerAs: '$ctrl',
             templateUrl: 'templates/partials/tasks_content.html'
           }
         }

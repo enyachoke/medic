@@ -5,21 +5,22 @@ var moment = require('moment'),
 
   'use strict';
 
-  var inboxServices = angular.module('inboxServices');
-
-  inboxServices.factory('TargetGenerator',
+  angular.module('inboxServices').factory('TargetGenerator',
     function(
       $log,
       $parse,
       $q,
+      CalendarInterval,
       RulesEngine,
       Settings,
+      UHCSettings,
       UserContact
     ) {
 
       'ngInect';
 
       var targets = [];
+      let relevantInterval;
 
       var isRelevant = function(instance) {
         if (!instance.date) {
@@ -29,10 +30,8 @@ var moment = require('moment'),
         if (instance.deleted) {
           return false;
         }
-        var start = moment().startOf('month');
-        var end = moment().endOf('month');
         var instanceDate = moment(instance.date);
-        return instanceDate.isAfter(start) && instanceDate.isBefore(end);
+        return instanceDate.isAfter(relevantInterval.start) && instanceDate.isBefore(relevantInterval.end);
       };
 
       var calculatePercent = function(pass, total) {
@@ -74,11 +73,13 @@ var moment = require('moment'),
       };
 
       var init = $q.all([ Settings(), UserContact() ])
-        .then(function(results) {
-          var items = results[0].tasks &&
-                      results[0].tasks.targets &&
-                      results[0].tasks.targets.items;
-          var userContact = results[1];
+        .then(([settings, userContact]) => {
+          var items = settings.tasks &&
+                      settings.tasks.targets &&
+                      settings.tasks.targets.items;
+
+          relevantInterval = CalendarInterval.getCurrent(UHCSettings.getMonthStartDate(settings));
+
           if (!items) {
             targets = [];
             return;
@@ -93,7 +94,7 @@ var moment = require('moment'),
               // Clone the `userContact` object to prevent bad context
               // expressions from modifying it - this could leak into other
               // expressions.
-              var clone = JSON.parse(JSON.stringify(userContact));
+              var clone = userContact ? JSON.parse(JSON.stringify(userContact)) : {};
               return $parse(item.context)({ user: clone });
             }
             return true;
@@ -101,16 +102,20 @@ var moment = require('moment'),
         });
 
       return function(callback) {
-        init
-          .then(function() {
-            RulesEngine.listen('TargetGenerator', 'target', function(err, _targets) {
-              if (!err) {
-                _targets.forEach(mergeTarget);
-              }
-              callback(err, targets);
-            });
-          })
-          .catch(callback);
+        if (RulesEngine.enabled) {
+          init
+            .then(function() {
+              RulesEngine.listen('TargetGenerator', 'target', function(err, _targets) {
+                if (!err) {
+                  _targets.forEach(mergeTarget);
+                }
+                callback(err, targets);
+              });
+            })
+            .catch(callback);
+        } else {
+          callback(null, []);
+        }
       };
     }
   );

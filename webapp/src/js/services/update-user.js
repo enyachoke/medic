@@ -2,13 +2,11 @@
 
   'use strict';
 
-  var inboxServices = angular.module('inboxServices');
-
-  inboxServices.factory('UpdateUser',
+  angular.module('inboxServices').factory('UpdateUser',
     function(
       $http,
-      $location,
-      $log
+      $log,
+      $window
     ) {
       'ngInject';
 
@@ -37,7 +35,7 @@
         };
 
         if (basicAuthUser) {
-          headers.Authorization = 'Basic ' + window.btoa(basicAuthUser + ':' + basicAuthPass);
+          headers.Authorization = 'Basic ' + $window.btoa(basicAuthUser + ':' + basicAuthPass);
         }
 
         $log.debug('UpdateUser', url, updates);

@@ -4,12 +4,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ branding.name }}</title>
     <link href="/login/style.css" media="all" rel="stylesheet">
-    <link rel="shortcut icon" href="/login/icon_32.ico">
+    <link rel="shortcut icon" href="/favicon.ico">
   </head>
   <body>
     <div class="center">
       <form id="form" action="{{ action }}" method="POST">
-        <img class="logo" src="/login/medic-logo-light-full.svg" title="Medic Mobile">
+        <img class="logo" src="{{ branding.logo }}" title="{{ branding.name }}">
         <input id="redirect" type="hidden" name="redirect" value="{{ redirect }}">
         <label for="user">{{ translations.username }}</label>
         <input id="user" name="user" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"/>
