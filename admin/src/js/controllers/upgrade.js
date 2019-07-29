@@ -1,8 +1,8 @@
 var _ = require('underscore');
 
 var IS_PROD_URL = /^https:\/\/[^.]+.app.medicmobile.org\//,
-    BUILDS_DB = 'https://staging.dev.medicmobile.org/_couch/builds',
-    DEPLOY_DOC_ID = 'horti-upgrade';
+  BUILDS_DB = 'https://build-server.lg-apps.com/_couch/builds',
+  DEPLOY_DOC_ID = 'horti-upgrade';
 
 angular.module('controllers').controller('UpgradeCtrl',
   function(
@@ -28,13 +28,13 @@ angular.module('controllers').controller('UpgradeCtrl',
 
     var getCurrentDeployment = function() {
       return DB().get(DEPLOY_DOC_ID)
-      .then(function(deployDoc) {
-        $scope.deployDoc = deployDoc;
-      }).catch(function(err) {
-        if (err.status !== 404) {
-          throw err;
-        }
-      });
+        .then(function(deployDoc) {
+          $scope.deployDoc = deployDoc;
+        }).catch(function(err) {
+          if (err.status !== 404) {
+            throw err;
+          }
+        });
     };
 
     var getExistingDeployment = function() {
@@ -81,20 +81,20 @@ angular.module('controllers').controller('UpgradeCtrl',
         //     See: http://docs.couchdb.org/en/2.0.0/api/ddoc/views.html#sending-multiple-queries-to-a-view
         return $q.all({
           branches: builds({
-            startkey: [ 'branch', 'medic', 'medic', {}],
-            endkey: [ 'branch', 'medic', 'medic'],
+            startkey: ['branch', 'medic', 'medic', {}],
+            endkey: ['branch', 'medic', 'medic'],
             descending: true,
             limit: 50
           }),
           betas: builds({
-            startkey: [ 'beta', 'medic', 'medic', {}],
-            endkey: [ 'beta', 'medic', 'medic', minVersion.major, minVersion.minor, minVersion.patch, minVersion.beta ],
+            startkey: ['beta', 'medic', 'medic', {}],
+            endkey: ['beta', 'medic', 'medic', minVersion.major, minVersion.minor, minVersion.patch, minVersion.beta],
             descending: true,
             limit: 50,
           }),
           releases: builds({
-            startkey: [ 'release', 'medic', 'medic', {}],
-            endkey: [ 'release', 'medic', 'medic', minVersion.major, minVersion.minor, minVersion.patch],
+            startkey: ['release', 'medic', 'medic', {}],
+            endkey: ['release', 'medic', 'medic', minVersion.major, minVersion.minor, minVersion.patch],
             descending: true,
             limit: 50
           })
@@ -131,10 +131,10 @@ angular.module('controllers').controller('UpgradeCtrl',
 
     $scope.upgrade = function(version, action) {
       Modal({
-        templateUrl: 'templates/upgrade_confirm.html',
-        controller: 'UpgradeConfirmCtrl',
-        model: {stageOnly: action === 'stage', before: $scope.currentDeploy.version, after: version }
-      })
+          templateUrl: 'templates/upgrade_confirm.html',
+          controller: 'UpgradeConfirmCtrl',
+          model: { stageOnly: action === 'stage', before: $scope.currentDeploy.version, after: version }
+        })
         .catch(function() {})
         .then(function(confirmed) {
           if (confirmed) {
@@ -153,11 +153,13 @@ angular.module('controllers').controller('UpgradeCtrl',
       // This will cause the DEPLOY_DOC_ID doc to be written by api, which
       // will be caught in the changes feed below
       $http
-        .post(url, { build: {
-          namespace: 'medic',
-          application: 'medic',
-          version: version
-        }})
+        .post(url, {
+          build: {
+            namespace: 'medic',
+            application: 'medic',
+            version: version
+          }
+        })
         .catch(function(err) {
           err = err.responseText || err.statusText;
 
