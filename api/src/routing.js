@@ -30,6 +30,7 @@ const _ = require('underscore'),
   upgrade = require('./controllers/upgrade'),
   settings = require('./controllers/settings'),
   bulkDocs = require('./controllers/bulk-docs'),
+  africasTalking = require('./controllers/africas-talking'),
   authorization = require('./middleware/authorization'),
   createUserDb = require('./controllers/create-user-db'),
   staticResources = /\/(templates|static)\//,
@@ -131,7 +132,10 @@ app.use(
           'data:', // unsafe
           'blob:',
         ],
-        mediaSrc: [`'self'`],
+        mediaSrc: [
+          `'self'`,
+          'blob:',
+        ],
         scriptSrc: [
           `'self'`,
           `'sha256-6i0jYw/zxQO6q9fIxqI++wftTrPWB3yxt4tQqy6By6k='`, // Explicitly allow the telemetry script setting startupTimes
@@ -294,6 +298,13 @@ app.get('/api/info', function(req, res) {
   res.json({ version: p.version });
 });
 
+app.get('/api/deploy-info', (req, res) => {
+  if (!req.userCtx) {
+    return serverUtils.notLoggedIn(req, res);
+  }
+  res.json(environment.getDeployInfo());
+});
+
 app.get('/api/auth/:path', function(req, res) {
   auth.checkUrl(req)
     .then(status => {
@@ -312,26 +323,14 @@ app.post('/api/v1/upgrade', jsonParser, upgrade.upgrade);
 app.post('/api/v1/upgrade/stage', jsonParser, upgrade.stage);
 app.post('/api/v1/upgrade/complete', jsonParser, upgrade.complete);
 
-app.get('/api/sms/', function(req, res) {
-  res.redirect(301, '/api/sms');
-});
-app.get('/api/sms', function(req, res) {
-  auth
-    .check(req, 'can_access_gateway_api')
-    .then(() => res.json(smsGateway.get()))
-    .catch(err => serverUtils.error(err, req, res));
-});
+app.post('/api/v1/sms/africastalking/incoming-messages', formParser, africasTalking.incomingMessages);
+app.post('/api/v1/sms/africastalking/delivery-reports', formParser, africasTalking.deliveryReports);
 
-app.post('/api/sms/', function(req, res) {
-  res.redirect(301, '/api/sms');
-});
-app.postJson('/api/sms', function(req, res) {
-  auth
-    .check(req, 'can_access_gateway_api')
-    .then(() => smsGateway.post(req))
-    .then(results => res.json(results))
-    .catch(err => serverUtils.error(err, req, res));
-});
+app.get('/api/sms/', (req, res) => res.redirect(301, '/api/sms'));
+app.get('/api/sms', smsGateway.get);
+
+app.post('/api/sms/', (req, res) => res.redirect(301, '/api/sms'));
+app.postJson('/api/sms', smsGateway.post);
 
 app.get('/api/v2/export/:type', exportData.get);
 app.postJson('/api/v2/export/:type', exportData.get);
