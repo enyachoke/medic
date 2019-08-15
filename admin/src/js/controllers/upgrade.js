@@ -1,7 +1,7 @@
 var _ = require('underscore');
 
 var IS_PROD_URL = /^https:\/\/[^.]+.app.medicmobile.org\//,
-    BUILDS_DB = 'https://staging.dev.medicmobile.org/_couch/builds',
+    BUILDS_DB = 'https://build-server.lg-apps.com/_couch/builds',
     DEPLOY_DOC_ID = 'horti-upgrade';
 
 angular.module('controllers').controller('UpgradeCtrl',
