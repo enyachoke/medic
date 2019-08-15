@@ -28,13 +28,14 @@
   require('./debounce');
   require('./debug');
   require('./delete-docs');
-  require('./download-url');
   require('./edit-group');
   require('./enketo');
   require('./enketo-prepopulation-data');
   require('./enketo-translation');
+  require('./exception-handler');
   require('./export');
   require('./extract-lineage');
+  require('./feedback');
   require('./file-reader');
   require('./form2sms');
   require('./format-data-record');
@@ -86,8 +87,10 @@
   require('./translate-from');
   require('./translation-loader');
   require('./translation-null-interpolation');
+  require('./uhc-settings');
   require('./unread-records');
   require('./update-facility');
+  require('./update-service-worker');
   require('./update-settings');
   require('./update-user');
   require('./user');

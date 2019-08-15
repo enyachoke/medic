@@ -8,7 +8,7 @@ const _ = require('underscore'),
       semver = require('semver');
 
 const DEFAULT_EXPECTED = [
-  'appcache',
+  'service-worker-meta',
   'settings',
   'resources',
   'branding',
@@ -538,29 +538,6 @@ describe('changes handler', () => {
         });
     });
 
-    it('normal feeds should replicate correctly when new changes are pushed', () => {
-      const allowedDocs = createSomeContacts(25, 'fixture:bobville'),
-            allowedDocs2 = createSomeContacts(25, 'fixture:bobville');
-
-      const ids = _.pluck(allowedDocs, '_id');
-      ids.push(..._.pluck(allowedDocs2, '_id'));
-
-      const promise = allowedDocs.reduce((promise, doc) => {
-        return promise.then(() => utils.saveDoc(doc));
-      }, Promise.resolve());
-
-      return utils
-        .saveDocs(allowedDocs2)
-        .then(() => Promise.all([
-          promise,
-          getChangesForIds('bob', ids, true, currentSeq, 4),
-        ]))
-        .then(([ p, changes ]) => {
-          expect(ids.every(id => changes.find(change => change.id === id))).toBe(true);
-          expect(changes.some(change => !change.seq)).toBe(false);
-        });
-    });
-
     it('filters allowed changes in longpolls', () => {
       const allowedDocs = createSomeContacts(3, 'fixture:bobville');
       const deniedDocs = createSomeContacts(3, 'irrelevant-place');
@@ -926,6 +903,17 @@ describe('changes handler', () => {
        });
     });
 
+    it('should forward changes requests when db name is not medic', () => {
+      return utils
+        .requestOnMedicDb(_.defaults({ path: '/_changes' }, { auth: `bob:${password}` }))
+        .then(results => {
+          return assertChangeIds(results,
+            'org.couchdb.user:bob',
+            'fixture:bobville',
+            'fixture:user:bob');
+      });
+    });
+
     it('filters calls with irregular urls which match couchdb endpoint', () => {
       const options = {
         auth: `bob:${password}`,
@@ -945,7 +933,19 @@ describe('changes handler', () => {
             .catch(err => err),
           utils
             .request(_.defaults({ path: `//${constants.DB_NAME}//_changes//dsadada` }, options))
-            .catch(err => err)
+            .catch(err => err),
+          utils.requestOnMedicDb(_.defaults({ path: '/_changes' }, options)),
+          utils.requestOnMedicDb(_.defaults({ path: '//_changes//' }, options)),
+          utils.request(_.defaults({ path: `//medic//_changes` }, options)),
+          utils
+            .requestOnMedicDb(_.defaults({ path: '/_changes/dsad' }, options))
+            .catch(err => err),
+          utils
+            .requestOnMedicDb(_.defaults({ path: '//_changes//dsada' }, options))
+            .catch(err => err),
+          utils
+            .request(_.defaults({ path: `//medic//_changes//dsadada` }, options))
+            .catch(err => err),
         ])
         .then(results => {
           results.forEach(result => {
@@ -1025,6 +1025,29 @@ describe('changes handler', () => {
           expect(changes[0].id).toEqual(contact._id);
           expect(changes[0].deleted).toEqual(undefined);
           expect(changes[0].changes[0].rev).toEqual(contact._rev);
+        });
+    });
+
+    it('normal feeds should replicate correctly when new changes are pushed', () => {
+      const allowedDocs = createSomeContacts(25, 'fixture:bobville'),
+            allowedDocs2 = createSomeContacts(25, 'fixture:bobville');
+
+      const ids = _.pluck(allowedDocs, '_id');
+      ids.push(..._.pluck(allowedDocs2, '_id'));
+
+      const promise = allowedDocs.reduce((promise, doc) => {
+        return promise.then(() => utils.saveDoc(doc));
+      }, Promise.resolve());
+
+      return utils
+        .saveDocs(allowedDocs2)
+        .then(() => Promise.all([
+          getChangesForIds('bob', ids, true, currentSeq, 4),
+          promise
+        ]))
+        .then(([ changes ]) => {
+          expect(ids.every(id => changes.find(change => change.id === id))).toBe(true);
+          expect(changes.some(change => !change.seq)).toBe(false);
         });
     });
   });

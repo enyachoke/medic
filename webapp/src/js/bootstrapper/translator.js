@@ -10,6 +10,7 @@ var TRANSLATIONS = {
     PURGE_INFO: ({ count, percent }) => `Cleaned ${count} documents (${percent}% complete)…`,
     LOAD_RULES: 'Loading rules…',
     STARTING_APP: 'Starting app…',
+    DOWNLOAD_APP: 'Downloading app…',
     ERROR_MESSAGE: 'Loading error, please check your connection.',
     TRY_AGAIN: 'Try again',
   },
@@ -20,6 +21,7 @@ var TRANSLATIONS = {
     PURGE_INFO: ({ count, percent }) => `Limpiado ${count} documentos (${percent}% completo)…`,
     LOAD_RULES: 'Cargando reglas…',
     STARTING_APP: 'Aplicación iniciando…',
+    DOWNLOAD_APP: 'Descargando aplicación…',
     ERROR_MESSAGE: 'Error al cargar, por favor comprueba la conexión',
     TRY_AGAIN: 'Volver a intentar',
   },
@@ -30,6 +32,10 @@ var TRANSLATIONS = {
     PURGE_INFO: ({ count, percent }) => `Imesafisha hati ${count} (Asilimia ${percent} imekamilika)…`,
     LOAD_RULES: 'Inapakia kanuni…',
     STARTING_APP: 'Programu yaanza…',
+<<<<<<< HEAD
+=======
+    DOWNLOAD_APP: 'Kupakua programu…',
+>>>>>>> 2d8d66364fc7386189f1542202bdb89883bb152c
     ERROR_MESSAGE: 'Kuna hitilafu katika kupakia, tafadhali hakikisha uko kwenye mtandao',
     TRY_AGAIN: 'Jaribu tena',
   },
@@ -44,6 +50,7 @@ var TRANSLATIONS = {
     PURGE_INFO: ({ count, percent }) => `${count} वटा डकुमेन्ट सफा गरीयो (${percent}% कार्य सम्पन्न)…`,
     LOAD_RULES: 'नियमहरू लोड गर्दै…',
     STARTING_APP: 'एप सुरु हुँदैछ…',
+    DOWNLOAD_APP: 'ऐप डाउनलोड गर्दै…',
     ERROR_MESSAGE: 'लोडिंग त्रुटि, कृपया आफ्नो ईन्टरनेट कनेक्सन जाँच गर्नुहोस्',
     TRY_AGAIN: 'पुन: प्रयास गर्नुहोस्',
   },
@@ -54,6 +61,7 @@ var TRANSLATIONS = {
     PURGE_INFO: ({ count, percent }) => `${count} document(s) nettoyé(s) [${percent}% terminé(s)]…`,
     LOAD_RULES: 'Chargement des paramètres…',
     STARTING_APP: 'App de démarrage…',
+    DOWNLOAD_APP: 'Téléchargement de l\'app en cours…',
     ERROR_MESSAGE: 'Erreur de chargement, veuillez vérifier votre connexion',
     TRY_AGAIN: 'Réessayer',
   },
@@ -64,6 +72,10 @@ var TRANSLATIONS = {
     PURGE_INFO: ({ count, percent }) => `${count} दस्तावेज साफ किए (${percent}% पूर्ण)…`,
     LOAD_RULES: 'नियम लोड हो रहें हैं…',
     STARTING_APP: 'ऐप शुरी की जा रही है…',
+<<<<<<< HEAD
+=======
+    DOWNLOAD_APP: 'एप डाउनलोड हो रही है…',
+>>>>>>> 2d8d66364fc7386189f1542202bdb89883bb152c
     ERROR_MESSAGE: 'लोडिंग में त्रुटि, कृपया अपना कनेक्शन जांचें।',
     TRY_AGAIN: 'पुन: प्रयास करें',
   },

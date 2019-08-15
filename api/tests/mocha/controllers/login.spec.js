@@ -1,19 +1,19 @@
 const controller = require('../../../src/controllers/login'),
-      chai = require('chai'),
-      environment = require('../../../src/environment'),
-      auth = require('../../../src/auth'),
-      cookie = require('../../../src/services/cookie'),
-      db = require('../../../src/db').medic,
-      sinon = require('sinon'),
-      config = require('../../../src/config'),
-      request = require('request-promise-native'),
-      fs = require('fs'),
-      DB_NAME = 'lg',
-      DDOC_NAME = 'medic';
+  chai = require('chai'),
+  environment = require('../../../src/environment'),
+  auth = require('../../../src/auth'),
+  cookie = require('../../../src/services/cookie'),
+  db = require('../../../src/db').medic,
+  sinon = require('sinon'),
+  config = require('../../../src/config'),
+  request = require('request-promise-native'),
+  fs = require('fs'),
+  DB_NAME = 'lg',
+  DDOC_NAME = 'medic';
 
 let req,
-    res,
-    originalEnvironment;
+  res,
+  originalEnvironment;
 
 describe('login controller', () => {
 
@@ -21,14 +21,16 @@ describe('login controller', () => {
     req = {
       query: {},
       body: {},
-      hostname: 'xx.app.medicmobile.org'
+      hostname: 'xx.app.medicmobile.org',
+      headers: { cookie: '' }
     };
     res = {
       redirect: () => {},
       send: () => {},
       status: () => {},
       json: () => {},
-      cookie: () => {}
+      cookie: () => {},
+      clearCookie: () => {}
     };
     originalEnvironment = Object.assign(environment);
 
@@ -53,18 +55,37 @@ describe('login controller', () => {
 
   describe('safePath', () => {
 
-    [
-      '',
-      null,
-      'http://example.com',
-      '%22%3E%3Cscript%3Ealert%28%27hello%27%29%3C/script%3E',
-      'https://app.medicmobile.org/wrong/path',
-      'http://app.medicmobile.org/lg/_design/medic/_rewrite', // wrong protocol
-      '/lg/_design/medic/_rewrite/../../../../../.htpasswd',
-      '/lg/_design/medic/_rewrite_gone_bad',
-    ].forEach(requested => {
-      it(`Bad URL "${requested}" should redirect to root`, () => {
-        chai.expect('/lg/_design/medic/_rewrite').to.equal(controller.safePath(requested));
+    [{
+        given: '',
+        expected: '/'
+      },
+      {
+        given: null,
+        expected: '/'
+      },
+      {
+        given: 'http://example.com',
+        expected: '/'
+      },
+      {
+        given: '%22%3E%3Cscript%3Ealert%28%27hello%27%29%3C/script%3E',
+        expected: '/%22%3E%3Cscript%3Ealert%28%27hello%27%29%3C/script%3E'
+      },
+      {
+        given: 'https://app.medicmobile.org/right/path',
+        expected: '/right/path'
+      },
+      {
+        given: 'http://app.medicmobile.org/lg/_design/medic/_rewrite',
+        expected: '/lg/_design/medic/_rewrite'
+      },
+      {
+        given: '/lg/_design/medic/_rewrite/../../../../../.htpasswd',
+        expected: '/.htpasswd'
+      },
+    ].forEach(({ given, expected }) => {
+      it(`Bad URL "${given}" should redirect to root`, () => {
+        chai.expect(expected).to.equal(controller.safePath(given));
       });
     });
 
@@ -80,8 +101,7 @@ describe('login controller', () => {
       });
     });
 
-    [
-      {
+    [{
         given: 'http://test.com:1234/lg/_design/medic/_rewrite',
         expected: '/lg/_design/medic/_rewrite'
       },
@@ -118,7 +138,7 @@ describe('login controller', () => {
         chai.expect(cookie.args[0][0]).to.equal('userCtx');
         chai.expect(cookie.args[0][1]).to.equal('{"name":"josh"}');
         chai.expect(redirect.callCount).to.equal(1);
-        chai.expect(redirect.args[0][0]).to.equal('/lg/_design/medic/_rewrite');
+        chai.expect(redirect.args[0][0]).to.equal('/');
       });
     });
 
@@ -155,7 +175,7 @@ describe('login controller', () => {
 
     it('when branding doc missing when not logged in send login page', () => {
       const getUserCtx = sinon.stub(auth, 'getUserCtx').rejects('not logged in');
-      const getDoc = sinon.stub(db, 'get').rejects({ error: 'not_found', docId: 'branding'});
+      const getDoc = sinon.stub(db, 'get').rejects({ error: 'not_found', docId: 'branding' });
       const send = sinon.stub(res, 'send');
       sinon.stub(fs, 'readFile').callsArgWith(2, null, 'LOGIN PAGE GOES HERE. {{translations.login}}');
       sinon.stub(config, 'translate').returns('TRANSLATED VALUE.');
@@ -166,6 +186,23 @@ describe('login controller', () => {
         chai.expect(getDoc.callCount).to.equal(1);
         chai.expect(send.callCount).to.equal(1);
         chai.expect(send.args[0][0]).to.equal('LOGIN PAGE GOES HERE. TRANSLATED VALUE.');
+      });
+    });
+
+    it('when already logged in and login=force cookie is present, render login', () => {
+      const getUserCtx = sinon.stub(auth, 'getUserCtx').resolves({ name: 'josh' });
+      const send = sinon.stub(res, 'send');
+      sinon.stub(db, 'get').resolves({});
+      const cookie = sinon.stub(res, 'cookie').returns(res);
+      req.headers.cookie = 'login=force';
+      return controller.get(req, res).then(() => {
+        chai.expect(getUserCtx.callCount).to.equal(1);
+        chai.expect(getUserCtx.args[0][0]).to.deep.equal(req);
+        chai.expect(cookie.callCount).to.equal(1);
+        chai.expect(cookie.args[0][0]).to.equal('userCtx');
+        chai.expect(cookie.args[0][1]).to.equal('{"name":"josh"}');
+        chai.expect(send.callCount).to.equal(1);
+        chai.expect(send.args[0][0]).to.include('<form id="form" action="/medic/login" method="POST">');
       });
     });
   });
@@ -204,7 +241,7 @@ describe('login controller', () => {
       req.body = { user: 'sharon', password: 'p4ss' };
       const postResponse = {
         statusCode: 200,
-        headers: { 'set-cookie': [ 'AuthSession=abc;' ] }
+        headers: { 'set-cookie': ['AuthSession=abc;'] }
       };
       const post = sinon.stub(request, 'post').resolves(postResponse);
       const status = sinon.stub(res, 'status').returns(res);
@@ -224,16 +261,17 @@ describe('login controller', () => {
       req.body = { user: 'sharon', password: 'p4ss' };
       const postResponse = {
         statusCode: 200,
-        headers: { 'set-cookie': [ 'AuthSession=abc;' ] }
+        headers: { 'set-cookie': ['AuthSession=abc;'] }
       };
       const post = sinon.stub(request, 'post').resolves(postResponse);
-      const send = sinon.stub(res, 'send');     
+      const send = sinon.stub(res, 'send');
       const status = sinon.stub(res, 'status').returns(res);
       const cookie = sinon.stub(res, 'cookie').returns(res);
-      const userCtx = { name: 'shazza', roles: [ 'project-stuff' ] };
+      const clearCookie = sinon.stub(res, 'clearCookie').returns(res);
+      const userCtx = { name: 'shazza', roles: ['project-stuff'] };
       const getUserCtx = sinon.stub(auth, 'getUserCtx').resolves(userCtx);
       const hasAllPermissions = sinon.stub(auth, 'hasAllPermissions').returns(false);
-      const getUserSettings = sinon.stub(auth, 'getUserSettings').resolves({ language: 'es' });
+      sinon.stub(auth, 'getUserSettings').resolves({ language: 'es' });
       return controller.post(req, res).then(() => {
         chai.expect(post.callCount).to.equal(1);
         chai.expect(post.args[0][0].url).to.equal('http://test.com:1234/_session');
@@ -246,7 +284,7 @@ describe('login controller', () => {
         chai.expect(hasAllPermissions.callCount).to.equal(1);
         chai.expect(status.callCount).to.equal(1);
         chai.expect(status.args[0][0]).to.equal(302);
-        chai.expect(send.args[0][0]).to.deep.equal('/lg/_design/medic/_rewrite');
+        chai.expect(send.args[0][0]).to.deep.equal('/');
         chai.expect(cookie.callCount).to.equal(3);
         chai.expect(cookie.args[0][0]).to.equal('AuthSession');
         chai.expect(cookie.args[0][1]).to.equal('abc');
@@ -257,6 +295,8 @@ describe('login controller', () => {
         chai.expect(cookie.args[2][0]).to.equal('locale');
         chai.expect(cookie.args[2][1]).to.equal('es');
         chai.expect(cookie.args[2][2]).to.deep.equal({ sameSite: 'lax', secure: false, maxAge: 31536000000 });
+        chai.expect(clearCookie.callCount).to.equal(1);
+        chai.expect(clearCookie.args[0][0]).to.equal('login');
       });
     });
 
@@ -264,15 +304,15 @@ describe('login controller', () => {
       req.body = { user: 'sharon', password: 'p4ss' };
       const postResponse = {
         statusCode: 200,
-        headers: { 'set-cookie': [ 'AuthSession=abc;' ] }
+        headers: { 'set-cookie': ['AuthSession=abc;'] }
       };
       sinon.stub(request, 'post').resolves(postResponse);
-      sinon.stub(res, 'send');     
+      sinon.stub(res, 'send');
       sinon.stub(res, 'status').returns(res);
       const cookie = sinon.stub(res, 'cookie').returns(res);
-      sinon.stub(auth, 'getUserCtx').resolves({ name: 'shazza', roles: [ 'project-stuff' ] });
+      sinon.stub(auth, 'getUserCtx').resolves({ name: 'shazza', roles: ['project-stuff'] });
       sinon.stub(auth, 'hasAllPermissions').returns(false);
-      sinon.stub(auth, 'getUserSettings').resolves({ });
+      sinon.stub(auth, 'getUserSettings').resolves({});
       return controller.post(req, res).then(() => {
         chai.expect(cookie.callCount).to.equal(2);
         chai.expect(cookie.args[0][0]).to.equal('AuthSession');
@@ -284,15 +324,15 @@ describe('login controller', () => {
       req.body = { user: 'sharon', password: 'p4ss' };
       const postResponse = {
         statusCode: 200,
-        headers: { 'set-cookie': [ 'AuthSession=abc;' ] }
+        headers: { 'set-cookie': ['AuthSession=abc;'] }
       };
       const post = sinon.stub(request, 'post').resolves(postResponse);
-      const send = sinon.stub(res, 'send');     
+      const send = sinon.stub(res, 'send');
       const status = sinon.stub(res, 'status').returns(res);
-      const userCtx = { name: 'shazza', roles: [ 'project-stuff' ] };
+      const userCtx = { name: 'shazza', roles: ['project-stuff'] };
       const getUserCtx = sinon.stub(auth, 'getUserCtx').resolves(userCtx);
       const hasAllPermissions = sinon.stub(auth, 'hasAllPermissions').returns(true);
-      const getUserSettings = sinon.stub(auth, 'getUserSettings').resolves({ language: 'es' });
+      sinon.stub(auth, 'getUserSettings').resolves({ language: 'es' });
       return controller.post(req, res).then(() => {
         chai.expect(post.callCount).to.equal(1);
         chai.expect(getUserCtx.callCount).to.equal(1);
@@ -300,7 +340,7 @@ describe('login controller', () => {
         chai.expect(hasAllPermissions.callCount).to.equal(1);
         chai.expect(status.callCount).to.equal(1);
         chai.expect(status.args[0][0]).to.equal(302);
-        chai.expect(send.args[0][0]).to.deep.equal('/lg/_design/medic-admin/_rewrite');
+        chai.expect(send.args[0][0]).to.deep.equal('/admin/');
       });
     });
   });
@@ -309,7 +349,7 @@ describe('login controller', () => {
 
     it('refreshes user cookie on valid identity call', () => {
       res.type = sinon.stub();
-      const userCtx = { name: 'alpha', roles: [ 'omega' ] };
+      const userCtx = { name: 'alpha', roles: ['omega'] };
       const getUserCtx = sinon.stub(auth, 'getUserCtx').resolves(userCtx);
       const cookie = sinon.stub(res, 'cookie').returns(res);
       const send = sinon.stub(res, 'send');

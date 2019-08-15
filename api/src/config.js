@@ -1,6 +1,7 @@
 const _ = require('underscore'),
   db = require('./db'),
   ddocExtraction = require('./ddoc-extraction'),
+  resourceExtraction = require('./resource-extraction'),
   translations = require('./translations'),
   defaults = require('./config.default.json'),
   settingsService = require('./services/settings'),
@@ -9,7 +10,8 @@ const _ = require('underscore'),
   viewMapUtils = require('@medic/view-map-utils'),
   translationUtils = require('@medic/translation-utils');
 
-let settings = {};
+let settings = {},
+    transitionsLib;
 
 const getMessage = (value, locale) => {
   const _findTranslation = (value, locale) => {
@@ -72,20 +74,34 @@ const loadSettings = function() {
   });
 };
 
+const initTransitionLib = () => {
+  transitionsLib = require('@medic/transitions')(db, settings, translationCache, logger);
+  // loadTransitions could throw errors when some transitions are misconfigured
+  try {
+    transitionsLib.loadTransitions(true);
+  } catch(err) {
+    logger.error(err);
+  }
+};
+
 const loadTranslations = () => {
   const options = { key: ['translations', true], include_docs: true };
-  db.medic.query('medic-client/doc_by_type', options, (err, result) => {
-    if (err) {
+  return db.medic
+    .query('medic-client/doc_by_type', options)
+    .catch(err => {
       logger.error('Error loading translations - starting up anyway: %o', err);
-      return;
-    }
-    result.rows.forEach(row => {
-      // If the field generic does not exist then we assume that the translation document 
-      // has not been converted to the new format so we will use the field values
-      const values = row.doc.generic ? Object.assign(row.doc.generic, row.doc.custom || {}) : row.doc.values;
-      translationCache[row.doc.code] = translationUtils.loadTranslations(values);
+    })
+    .then(result => {
+      if (!result) {
+        return;
+      }
+      result.rows.forEach(row => {
+        // If the field generic does not exist then we assume that the translation document
+        // has not been converted to the new format so we will use the field values
+        const values = row.doc.generic ? Object.assign(row.doc.generic, row.doc.custom || {}) : row.doc.values;
+        translationCache[row.doc.code] = translationUtils.loadTranslations(values);
+      });
     });
-  });
 };
 
 const loadViewMaps = () => {
@@ -126,9 +142,8 @@ module.exports = {
     }
   },
   load: () => {
-    loadTranslations();
     loadViewMaps();
-    return loadSettings();
+    return Promise.all([ loadTranslations(), loadSettings() ]).then(() => initTransitionLib());
   },
   listen: () => {
     db.medic
@@ -143,16 +158,22 @@ module.exports = {
             logger.error('Something went wrong trying to extract ddocs: %o', err);
             process.exit(1);
           });
+          resourceExtraction.run().catch(err => {
+            logger.error('Something went wrong trying to extract resources: %o', err);
+            process.exit(1);
+          });
           loadViewMaps();
         } else if (change.id === 'settings') {
           logger.info('Detected settings change - reloading');
-          loadSettings().catch(err => {
-            logger.error('Failed to reload settings: %o', err);
-            process.exit(1);
-          });
+          loadSettings()
+            .catch(err => {
+              logger.error('Failed to reload settings: %o', err);
+              process.exit(1);
+            })
+            .then(() => initTransitionLib());
         } else if (change.id.indexOf('messages-') === 0) {
           logger.info('Detected translations change - reloading');
-          loadTranslations();
+          loadTranslations().then(() => initTransitionLib());
         }
       })
       .on('error', err => {
@@ -160,4 +181,6 @@ module.exports = {
         process.exit(1);
       });
   },
+  initTransitionLib: initTransitionLib,
+  getTransitionsLib: () => transitionsLib
 };

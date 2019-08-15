@@ -60,9 +60,7 @@ define( function( require, exports, module ) {
         new TimerAnimation(canvas[0], DIM, DIM, parseInt($el.val()) || DEFAULT_TIME);
     };
 
-    Timerwidget.prototype.destroy = function( element ) {
-        /* jshint unused:false */
-    };
+    Timerwidget.prototype.destroy = function( element ) {};  // eslint-disable-line no-unused-vars
 
     $.fn[ pluginName ] = function( options, event ) {
         return this.each( function() {
@@ -109,7 +107,11 @@ function TimerAnimation(canvas, canvasW, canvasH, duration) {
         }
 
         function loadSound() {
+<<<<<<< HEAD
             return new Audio('./audio/alert.mp3');
+=======
+            return new Audio('/audio/alert.mp3');
+>>>>>>> 2d8d66364fc7386189f1542202bdb89883bb152c
         }
 
         return {

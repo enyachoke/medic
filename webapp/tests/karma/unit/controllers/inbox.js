@@ -10,7 +10,6 @@ describe('InboxCtrl controller', () => {
     RecurringProcessManager,
     changes,
     changesListener = {},
-    changesSpy,
     session;
 
   beforeEach(() => {
@@ -20,17 +19,19 @@ describe('InboxCtrl controller', () => {
     RecurringProcessManager = {
       startUpdateRelativeDate: sinon.stub(),
       stopUpdateRelativeDate: sinon.stub(),
+      startUpdateReadDocsCount: sinon.stub(),
+      stopUpdateReadDocsCount: sinon.stub()
     };
 
     changes = options => {
       changesListener[options.key] = options;
     };
-    changesSpy = sinon.spy(changes);
 
     session = {
       init: sinon.stub(),
       isAdmin: sinon.stub(),
       userCtx: sinon.stub(),
+      isOnlineOnly: sinon.stub()
     };
 
     module($provide => {
@@ -115,6 +116,8 @@ describe('InboxCtrl controller', () => {
     spyState.go.resetHistory();
   });
 
+  afterEach(() => sinon.restore());
+
   it('navigates back to contacts state after deleting contact', done => {
     scope.deleteDoc(dummyId);
 
@@ -143,7 +146,7 @@ describe('InboxCtrl controller', () => {
     });
   });
 
-  it('does not deleteContact if user cancels modal', () => {
+  it('does not deleteContact if user cancels modal', done => {
     stubModal.reset();
     stubModal.returns(Promise.reject({ err: 'user cancelled' }));
 
@@ -154,16 +157,18 @@ describe('InboxCtrl controller', () => {
 
       chai.assert.isFalse(spyState.go.called, 'state change should not happen');
       chai.assert.isFalse(snackbar.called, 'toast should be shown');
+      done();
     });
   });
 
-  it('should start the relative date update recurring process', () => {
+  it('should start the relative date update recurring process', done => {
     setTimeout(() => {
       scope.$apply();
 
       chai
         .expect(RecurringProcessManager.startUpdateRelativeDate.callCount)
         .to.equal(1);
+      done();
     });
   });
 
@@ -174,8 +179,19 @@ describe('InboxCtrl controller', () => {
       .to.equal(1);
   });
 
-  it('should watch changes in facilities, translations, ddoc and user context', () => {
-    chai.expect(changesListener['inbox-facilities']).to.be.an('object');
+  it('should not start the UpdateUnreadDocsCount recurring process when not online', () => {
+    chai.expect(RecurringProcessManager.startUpdateReadDocsCount.callCount).to.equal(0);
+    scope.$destroy();
+    chai.expect(RecurringProcessManager.stopUpdateReadDocsCount.callCount).to.equal(1);
+  });
+
+  it('should start the UpdateUnreadDocsCount recurring process when online', () => {
+    session.isOnlineOnly.returns(true);
+    createController();
+    chai.expect(RecurringProcessManager.startUpdateReadDocsCount.callCount).to.equal(1);
+  });
+
+  it('should watch changes in translations, ddoc and user context', () => {
     chai.expect(changesListener['inbox-translations']).to.be.an('object');
     chai.expect(changesListener['inbox-ddoc']).to.be.an('object');
     chai.expect(changesListener['inbox-user-context']).to.be.an('object');
@@ -184,11 +200,10 @@ describe('InboxCtrl controller', () => {
   it('InboxUserContent Changes listener should filter only logged in user, if exists', () => {
     session.userCtx.returns({ name: 'adm', roles: ['alpha', 'omega'] });
     createController();
-    chai.expect(changesListener['inbox-user-context'].filter({ doc: {} })).to.equal(false);
-    chai.expect(changesListener['inbox-user-context'].filter({ doc: { type: 'person'} })).to.equal(false);
-    chai.expect(changesListener['inbox-user-context'].filter({ doc: { type: 'user-settings'} })).to.equal(false);
-    chai.expect(changesListener['inbox-user-context'].filter({ doc: { type: 'user-settings', name: 'a'} })).to.equal(false);
-    chai.expect(changesListener['inbox-user-context'].filter({ doc: { type: 'user-settings', name: 'adm'} })).to.equal(true);
+    chai.expect(changesListener['inbox-user-context'].filter({ id: 'something' })).to.equal(false);
+    chai.expect(changesListener['inbox-user-context'].filter({ id: 'someperson' })).to.equal(false);
+    chai.expect(changesListener['inbox-user-context'].filter({ id: 'org.couchdb.user:someone' })).to.equal(false);
+    chai.expect(changesListener['inbox-user-context'].filter({ id: 'org.couchdb.user:adm' })).to.equal(true);
 
     session.userCtx.returns(false);
     createController();

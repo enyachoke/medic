@@ -2,11 +2,11 @@
 
   'use strict';
 
-  var ONLINE_ROLE = 'mm-online';
+  const purger = require('./purger');
+  const registerServiceWorker = require('./swRegister');
+  const translator = require('./translator');
 
-  var translator = require('./translator');
-
-  var purger = require('./purger');
+  const ONLINE_ROLE = 'mm-online';
 
   var getUserCtx = function() {
     var userCtx, locale;
@@ -31,16 +31,15 @@
     }
   };
 
-  var getDbInfo = function() {
+  const getDbInfo = function() {
     // parse the URL to determine the remote and local database names
-    var url = window.location.href;
-    var protocolLocation = url.indexOf('//') + 2;
-    var hostLocation = url.indexOf('/', protocolLocation) + 1;
-    var dbNameLocation = url.indexOf('/', hostLocation);
-    var dbName = url.slice(hostLocation, dbNameLocation);
+    const location = window.location;
+    const dbName = 'medic';
+    const port = location.port ? ':' + location.port : '';
+    const remoteDB = location.protocol + '//' + location.hostname + port + '/' + dbName;
     return {
       name: dbName,
-      remote: url.slice(0, dbNameLocation)
+      remote: remoteDB
     };
   };
 
@@ -128,7 +127,8 @@
   module.exports = function(POUCHDB_OPTIONS, callback) {
     var dbInfo = getDbInfo();
     var userCtx = getUserCtx();
-    if (!userCtx) {
+    const hasForceLoginCookie = document.cookie.includes('login=force');
+    if (!userCtx || hasForceLoginCookie) {
       var err = new Error('User must reauthenticate');
       err.status = 401;
       return redirectToLogin(dbInfo, err, callback);
@@ -140,26 +140,29 @@
 
     translator.setLocale(userCtx.locale);
 
-    var username = userCtx.name;
-    var localDbName = getLocalDbName(dbInfo, username);
+    const onServiceWorkerInstalling = () => setUiStatus('DOWNLOAD_APP');
+    const swRegistration = registerServiceWorker(onServiceWorkerInstalling);
 
-    var localDb = window.PouchDB(localDbName, POUCHDB_OPTIONS.local);
-    var remoteDb = window.PouchDB(dbInfo.remote, POUCHDB_OPTIONS.remote);
+    const localDbName = getLocalDbName(dbInfo, userCtx.name);
+    const localDb = window.PouchDB(localDbName, POUCHDB_OPTIONS.local);
+    const remoteDb = window.PouchDB(dbInfo.remote, POUCHDB_OPTIONS.remote);
 
-    let initialReplicationNeeded;
+    const testReplicationNeeded = () => getDdoc(localDb).then(() => false).catch(() => true);
 
-    getDdoc(localDb)
-      .then(function() {
-        // ddoc found - no need for initial replication
-      })
-      .catch(function() {
-        // no ddoc found - do replication
-        initialReplicationNeeded = true;
-        return initialReplication(localDb, remoteDb)
-          .then(function() {
-            return getDdoc(localDb).catch(function() {
-              throw new Error('Initial replication failed');
+    let isInitialReplicationNeeded;
+    Promise.all([swRegistration, testReplicationNeeded()])
+      .then(function(resolved) {
+        isInitialReplicationNeeded = !!resolved[1];
+
+        if (isInitialReplicationNeeded) {
+          return initialReplication(localDb, remoteDb)
+            .then(testReplicationNeeded)
+            .then(isReplicationStillNeeded => {
+              if (isReplicationStillNeeded) {
+                throw new Error('Initial replication failed');
+              }
             });
+<<<<<<< HEAD
           });
       })
       .then(() => {
@@ -179,7 +182,23 @@
       })
       .catch(function(err) {
         return err;
+=======
+        }
+>>>>>>> 2d8d66364fc7386189f1542202bdb89883bb152c
       })
+      .then(() => purger(localDb, userCtx, isInitialReplicationNeeded)
+        .on('start', () => setUiStatus('PURGE_INIT'))
+        .on('progress', function(progress) {
+          setUiStatus('PURGE_INFO', {
+            count: progress.purged,
+            percent: Math.floor((progress.processed / progress.total) * 100)
+          });
+        })
+        .on('optimise', () => setUiStatus('PURGE_AFTER'))
+        .catch(console.error)
+      )
+      .then(() => setUiStatus('STARTING_APP'))
+      .catch(err => err)
       .then(function(err) {
         localDb.close();
         remoteDb.close();
@@ -195,4 +214,5 @@
       });
 
   };
+
 }());

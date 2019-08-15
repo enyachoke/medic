@@ -1,13 +1,15 @@
 const async = require('async'),
   moment = require('moment'),
-  date = require('../date'),
   config = require('../config'),
-  logger = require('../lib/logger'),
-  db = require('../db-nano');
+  transitionsLib = config.getTransitionsLib(),
+  date = transitionsLib.date,
+  logger = require('../lib/logger');
 
 const tasks = {
-  dueTasks: require('./due_tasks'),
+  dueTasks: transitionsLib.dueTasks,
   reminders: require('./reminders'),
+  replications: require('./replications'),
+  outbound: require('./outbound')
 };
 
 function getTime(_hour, _minute) {
@@ -38,20 +40,19 @@ exports.checkSchedule = function() {
   async.series(
     [
       cb => {
-        tasks.reminders.execute(
-          {
-            db: db,
-          },
-          cb
-        );
+        tasks.reminders.execute(cb);
       },
       cb => {
         if (exports.sendable(config, now)) {
-          tasks.dueTasks.execute(db, cb);
+          tasks.dueTasks.execute(cb);
         } else {
           cb();
         }
       },
+      cb => {
+        tasks.replications.execute(cb);
+      },
+      tasks.outbound.execute
     ],
     err => {
       if (err) {
